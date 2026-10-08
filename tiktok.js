@@ -11,6 +11,7 @@ function connect(username) {
     tiktokConnection = new WebcastPushConnection(username, {
         processInitialData: false,
         enableExtendedGiftInfo: true,
+        sessionId: process.env.TIKTOK_SESSION_ID || '',
     });
 
     tiktokConnection.connect()
@@ -18,6 +19,8 @@ function connect(username) {
         .catch(err => console.error(`[TikTok] Connect failed:`, err.message));
 
     tiktokConnection.on('gift', (data) => {
+        console.log(`[RAW] id:${data.giftId} name:${data.giftName} type:${data.giftType} repeatEnd:${data.repeatEnd} sender:${data.nickname}`);
+
         if (data.giftType === 1 && !data.repeatEnd) return;
 
         giftQueue.push({
