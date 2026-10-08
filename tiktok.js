@@ -1,51 +1,48 @@
-const { WebcastPushConnection } = require('tiktok-live-connector');
+const { TikTokLiveConnection, WebcastEvent, ControlEvent } = require('tiktok-live-connector');
 
 const giftQueue = [];
-let tiktokConnection = null;
+let connection = null;
 let currentUsername = null;
 
 function connect(username) {
-    if (tiktokConnection) tiktokConnection.disconnect();
+    if (connection) connection.disconnect();
 
     currentUsername = username;
-    tiktokConnection = new WebcastPushConnection(username, {
+    connection = new TikTokLiveConnection(username, {
+        signApiKey: process.env.EULER_API_KEY || '',
         processInitialData: false,
         enableExtendedGiftInfo: true,
-        sessionId: process.env.TIKTOK_SESSION_ID || '',
     });
 
-    tiktokConnection.connect()
+    connection.connect()
         .then(() => console.log(`[TikTok] Connected: @${username}`))
         .catch(err => console.error(`[TikTok] Connect failed:`, err.message));
 
-    tiktokConnection.on('gift', (data) => {
-        console.log(`[RAW] id:${data.giftId} name:${data.giftName} type:${data.giftType} repeatEnd:${data.repeatEnd} sender:${data.nickname}`);
-
-        if (data.giftType === 1 && !data.repeatEnd) return;
-
+    connection.on(WebcastEvent.GIFT, (data) => {
+        const giftType = data.giftDetails?.giftType;
+        console.log(`[RAW] id:${data.giftId} name:${data.giftDetails?.giftName} type:${giftType} repeatEnd:${data.repeatEnd} sender:${data.user?.nickname}`);
+        if (giftType === 1 && !data.repeatEnd) return;
         giftQueue.push({
             giftId: String(data.giftId),
-            giftName: data.giftName,
+            giftName: data.giftDetails?.giftName || 'unknown',
             count: data.repeatCount || 1,
-            sender: data.nickname || 'unknown',
+            sender: data.user?.nickname || 'unknown',
         });
-
-        console.log(`[Gift] ${data.nickname}: ${data.giftName} (id:${data.giftId}) x${data.repeatCount}`);
     });
 
-    tiktokConnection.on('disconnected', () => {
+    connection.on(ControlEvent.DISCONNECTED, () => {
         console.warn(`[TikTok] Disconnected — reconnect in 10s...`);
         setTimeout(() => { if (currentUsername) connect(currentUsername); }, 10000);
     });
 
-    tiktokConnection.on('error', (err) => {
-        console.error('[TikTok] Error:', err.message);
+    connection.on(ControlEvent.ERROR, ({ info, exception }) => {
+        console.error('[TikTok] Error:', info, exception?.message);
     });
 }
 
 function disconnect() {
-    if (tiktokConnection) tiktokConnection.disconnect();
-    tiktokConnection = null;
+    if (connection) connection.disconnect();
+    connection = null;
     currentUsername = null;
 }
 
