@@ -32,4 +32,4 @@ app.get('/status', auth, (req, res) => {
     res.json({ queueLength: tiktok.giftQueue.length, uptime: process.uptime() });
 });
 
-app.listen(process.env.PORT || 3000, () => console.log(`[Server] Running`));
+app.listen(process.env.PORT || 8080, () => console.log(`[Server] Running`));
