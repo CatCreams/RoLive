@@ -2,7 +2,7 @@ const express = require('express');
 const tiktok  = require('./tiktok');
 
 const app    = express();
-const API_KEY = process.env.API_KEY || 'ganti_ini';
+const API_KEY = process.env.API_KEY || 'tiktok-reactive-gift-queue-129DJJ';
 
 app.use(express.json());
 
