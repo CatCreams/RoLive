@@ -1,9 +1,9 @@
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
 const eventQueue = [];
-let connection   = null;
-let username     = null;
-let connected    = false;
+let connection = null;
+let username = null;
+let connected = false;
 
 function enqueue(type, payload) {
     eventQueue.push({ type, ts: Date.now(), ...payload });
@@ -12,12 +12,14 @@ function enqueue(type, payload) {
 
 function connect(user) {
     if (connection) connection.disconnect();
-    username  = user;
+    username = user;
     connected = false;
 
     connection = new WebcastPushConnection(user, {
         processInitialData: false,
         enableExtendedGiftInfo: true,
+        signApiKey: process.env.EULER_API_KEY || '',
+        sessionId: process.env.TIKTOK_SESSION_ID || '',
     });
 
     connection.connect()
@@ -30,24 +32,24 @@ function connect(user) {
     connection.on('gift', (data) => {
         if (data.giftType === 1 && !data.repeatEnd) return;
         enqueue('gift', {
-            giftId:   String(data.giftId),
-            giftName: data.giftName   || 'unknown',
-            count:    data.repeatCount || 1,
-            sender:   data.nickname   || 'unknown',
+            giftId: String(data.giftId),
+            giftName: data.giftName || 'unknown',
+            count: data.repeatCount || 1,
+            sender: data.nickname || 'unknown',
         });
     });
 
     connection.on('like', (data) => {
         enqueue('like', {
-            count:  data.likeCount  || 1,
-            sender: data.nickname   || 'unknown',
+            count: data.likeCount || 1,
+            sender: data.nickname || 'unknown',
         });
     });
 
     connection.on('chat', (data) => {
         enqueue('chat', {
-            message: data.comment  || '',
-            sender:  data.nickname || 'unknown',
+            message: data.comment || '',
+            sender: data.nickname || 'unknown',
         });
     });
 
@@ -65,8 +67,8 @@ function connect(user) {
 function disconnect() {
     if (connection) connection.disconnect();
     connection = null;
-    username   = null;
-    connected  = false;
+    username = null;
+    connected = false;
 }
 
 function poll(limit = 100) {
