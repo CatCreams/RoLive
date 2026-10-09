@@ -14,12 +14,13 @@ function connect(user) {
     if (connection) connection.disconnect();
     username = user;
     connected = false;
-
     connection = new WebcastPushConnection(user, {
         processInitialData: false,
         enableExtendedGiftInfo: true,
         signApiKey: process.env.EULER_API_KEY || '',
         sessionId: process.env.TIKTOK_SESSION_ID || '',
+        requestPollingIntervalMs: 2000,
+        enableWebsocketUpgrade: true,
     });
 
     connection.connect()
