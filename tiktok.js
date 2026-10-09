@@ -1,4 +1,4 @@
-const { TikTokLiveConnection, WebcastEvent, ControlEvent } = require('tiktok-live-connector');
+import { TikTokLiveConnection, WebcastEvent, ControlEvent } from 'tiktok-live-connector';
 
 const eventQueue = [];
 let connection   = null;
@@ -10,7 +10,7 @@ function enqueue(type, payload) {
     if (eventQueue.length > 500) eventQueue.shift();
 }
 
-function connect(user) {
+export function connect(user) {
     if (connection) connection.disconnect();
     username  = user;
     connected = false;
@@ -64,19 +64,17 @@ function connect(user) {
     });
 }
 
-function disconnect() {
+export function disconnect() {
     if (connection) connection.disconnect();
     connection = null;
     username   = null;
     connected  = false;
 }
 
-function poll(limit = 100) {
+export function poll(limit = 100) {
     return eventQueue.splice(0, limit);
 }
 
-function status() {
+export function status() {
     return { connected, username, queueLength: eventQueue.length };
 }
-
-module.exports = { connect, disconnect, poll, status };
