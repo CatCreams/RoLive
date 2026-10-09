@@ -25,18 +25,24 @@ sessions: dict = {}
 # ── Roblox Push ──────────────────────────────────────────────────────────────
 
 async def push_to_roblox(event: dict):
-    if not ROBLOX_API_KEY:
+    api_key = os.environ.get("ROBLOX_API_KEY", "")
+    universe_id = os.environ.get("UNIVERSE_ID", UNIVERSE_ID)
+    if not api_key:
+        print(f"[Push] SKIP — ROBLOX_API_KEY not set")
         return
     try:
-        async with httpx.AsyncClient(timeout=3) as c:
-            await c.post(
-                f"https://apis.roblox.com/messaging-service/v1/universes/{UNIVERSE_ID}/topics/{MESSAGING_TOPIC}",
+        async with httpx.AsyncClient(timeout=5) as c:
+            resp = await c.post(
+                f"https://apis.roblox.com/messaging-service/v1/universes/{universe_id}/topics/{MESSAGING_TOPIC}",
                 headers={
-                    "x-api-key": ROBLOX_API_KEY,
+                    "x-api-key": api_key,
                     "Content-Type": "application/json",
                 },
                 json={"message": json.dumps(event)},
             )
+            print(f"[Push] OK status={resp.status_code} type={event.get('type')} user={event.get('username')}")
+            if resp.status_code >= 400:
+                print(f"[Push] Error body: {resp.text}")
     except Exception as e:
         print(f"[Push] Failed: {e}")
 

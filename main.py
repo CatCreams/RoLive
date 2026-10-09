@@ -38,8 +38,11 @@ async def session_start(request: Request):
 
 @app.post("/session/stop", dependencies=[Depends(auth)])
 async def session_stop(request: Request):
-    body = await request.json()
-    username = body.get("username")   # None = stop all
+    try:
+        body = await request.json()
+        username = body.get("username")
+    except Exception:
+        username = None
     tiktok.disconnect(username)
     return {"ok": True}
 
