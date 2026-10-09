@@ -32,12 +32,12 @@ async def _run(user):
 
     @client.on(GiftEvent)
     async def on_gift(event):
-        if event.gift.streakable and not event.gift.streaking:
+        if event.gift.streakable and not event.repeat_end:
             return
         enqueue("gift", {
             "giftId":   str(event.gift.id),
             "giftName": event.gift.name or "unknown",
-            "count":    event.gift.count or 1,
+            "count":    event.repeat_count or 1,
             "sender":   event.user.nickname or "unknown",
         })
 
