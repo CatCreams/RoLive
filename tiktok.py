@@ -30,16 +30,27 @@ async def _run(user):
         connected = False
         print(f"[TikTok] Disconnected")
 
-    @client.on(GiftEvent)
-    async def on_gift(event):
-        if event.gift.streakable and not event.repeat_end:
-            return
-        enqueue("gift", {
-            "giftId":   str(event.gift.id),
-            "giftName": event.gift.name or "unknown",
-            "count":    event.repeat_count or 1,
-            "sender":   event.user.nickname or "unknown",
-        })
+    # @client.on(GiftEvent)
+    # async def on_gift(event):
+    #     if event.gift.streakable and not event.repeat_end:
+    #         return
+    #     enqueue("gift", {
+    #         "giftId":   str(event.gift.id),
+    #         "giftName": event.gift.name or "unknown",
+    #         "count":    event.repeat_count or 1,
+    #         "sender":   event.user.nickname or "unknown",
+    #     })
+        @client.on(GiftEvent)
+        async def on_gift(event):
+            print(f"[RAW GIFT] id:{event.gift.id} name:{event.gift.name} streakable:{event.gift.streakable} repeat_end:{event.repeat_end} count:{event.repeat_count}")
+            if event.gift.streakable and not event.repeat_end:
+                return
+            enqueue("gift", {
+                "giftId":   str(event.gift.id),
+                "giftName": event.gift.name or "unknown",
+                "count":    event.repeat_count or 1,
+                "sender":   event.user.nickname or "unknown",
+            })
 
     @client.on(LikeEvent)
     async def on_like(event):

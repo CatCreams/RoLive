@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TikLiveX Bridge</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f0f0f; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+
+  header {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border-bottom: 1px solid #ffffff15;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; color: #fff; }
+  header span { font-size: 0.8rem; color: #888; }
+
+  .badge {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge.online  { background: #00ff8820; color: #00ff88; border: 1px solid #00ff8840; }
+  .badge.offline { background: #ff004420; color: #ff4444; border: 1px solid #ff004440; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 20px;
+    padding: 20px 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: #1a1a1a;
+    border: 1px solid #ffffff10;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2 { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+
+  .stat { margin-bottom: 15px; }
+  .stat .label { font-size: 0.75rem; color: #666; margin-bottom: 4px; }
+  .stat .value { font-size: 1.5rem; font-weight: 700; color: #fff; }
+  .stat .value.green { color: #00ff88; }
+  .stat .value.red   { color: #ff4444; }
+
+  .roblox-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #00b4ff15;
+    border: 1px solid #00b4ff30;
+    color: #00b4ff;
+    padding: 8px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    transition: background 0.2s;
+  }
+  .roblox-link:hover { background: #00b4ff25; }
+
+  .feed { display: flex; flex-direction: column; gap: 8px; max-height: 600px; overflow-y: auto; }
+  .event-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #222;
+    border-radius: 8px;
+    padding: 10px 14px;
+    border-left: 3px solid transparent;
+    animation: fadeIn 0.3s ease;
+  }
+  .event-item.gift { border-color: #ffd700; }
+  .event-item.like { border-color: #ff4d6d; }
+  .event-item.chat { border-color: #00b4ff; }
+
+  .event-icon { font-size: 1.1rem; margin-top: 1px; }
+  .event-body { flex: 1; }
+  .event-sender { font-size: 0.8rem; font-weight: 600; color: #ccc; }
+  .event-detail { font-size: 0.85rem; color: #888; margin-top: 2px; }
+  .event-detail b { color: #ffd700; }
+
+  .gift-badge {
+    background: #ffd70020;
+    color: #ffd700;
+    border: 1px solid #ffd70040;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+
+  .uptime { font-size: 0.75rem; color: #444; margin-top: 15px; }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #111; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🚀 TikLiveX Bridge</h1>
+    <span>TikTok × Roblox Live Integration</span>
+  </div>
+  <div id="tiktok-badge" class="badge offline">● Offline</div>
+</header>
+
+<div class="grid">
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <div class="card">
+      <h2>TikTok Live</h2>
+      <div class="stat">
+        <div class="label">Username</div>
+        <div class="value" id="tt-username" style="font-size:1.1rem">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">Status</div>
+        <div class="value" id="tt-status">—</div>
+      </div>
+      <div class="stat">
+        <div class="label">Queue</div>
+        <div class="value" id="tt-queue" style="font-size:1.1rem">0</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Roblox Game</h2>
+      <div class="stat">
+        <div class="label">Players Online</div>
+        <div class="value green" id="rb-playing">—</div>
+      </div>
+      <a class="roblox-link" href="https://www.roblox.com/games/82169529818788" target="_blank">
+        🎮 Open Game
+      </a>
+    </div>
+
+    <div class="card">
+      <h2>Stats Session</h2>
+      <div class="stat">
+        <div class="label">Total Gift</div>
+        <div class="value" id="stat-gift" style="font-size:1.1rem;color:#ffd700">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Like</div>
+        <div class="value" id="stat-like" style="font-size:1.1rem;color:#ff4d6d">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Total Chat</div>
+        <div class="value" id="stat-chat" style="font-size:1.1rem;color:#00b4ff">0</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <h2>Live Event Feed</h2>
+    <div class="feed" id="feed"></div>
+  </div>
+</div>
+
+<script>
+const feed = document.getElementById('feed');
+let stats = { gift: 0, like: 0, chat: 0 };
+let seenTs = new Set();
+
+function iconFor(type) {
+  return type === 'gift' ? '🎁' : type === 'like' ? '❤️' : '💬';
+}
+
+function addEvent(ev) {
+  const key = `${ev.type}-${ev.ts}-${ev.sender}`;
+  if (seenTs.has(key)) return;
+  seenTs.add(key);
+
+  stats[ev.type] = (stats[ev.type] || 0) + 1;
+  document.getElementById('stat-' + ev.type).textContent = stats[ev.type];
+
+  const el = document.createElement('div');
+  el.className = `event-item ${ev.type}`;
+
+  let detail = '';
+  if (ev.type === 'gift') {
+    detail = `<span class="gift-badge">x${ev.count}</span> <b>${ev.giftName}</b> <span style="color:#666;font-size:0.75rem">#${ev.giftId}</span>`;
+  } else if (ev.type === 'like') {
+    detail = `liked <b style="color:#ff4d6d">x${ev.count}</b>`;
+  } else {
+    detail = `<span style="color:#aaa">${ev.message}</span>`;
+  }
+
+  el.innerHTML = `
+    <div class="event-icon">${iconFor(ev.type)}</div>
+    <div class="event-body">
+      <div class="event-sender">${ev.sender}</div>
+      <div class="event-detail">${detail}</div>
+    </div>
+  `;
+
+  feed.insertBefore(el, feed.firstChild);
+  if (feed.children.length > 100) feed.removeChild(feed.lastChild);
+}
+
+async function fetchDashboard() {
+  try {
+    const r = await fetch('/api/dashboard');
+    const d = await r.json();
+
+    const tt = d.tiktok;
+    document.getElementById('tt-username').textContent = tt.username ? '@' + tt.username : '—';
+    document.getElementById('tt-status').textContent   = tt.connected ? 'Connected' : 'Disconnected';
+    document.getElementById('tt-status').className     = 'value ' + (tt.connected ? 'green' : 'red');
+    document.getElementById('tt-queue').textContent    = tt.queueLength;
+    document.getElementById('tiktok-badge').textContent = tt.connected ? '● Online' : '● Offline';
+    document.getElementById('tiktok-badge').className   = 'badge ' + (tt.connected ? 'online' : 'offline');
+    document.getElementById('rb-playing').textContent  = d.roblox.playing;
+  } catch {}
+}
+
+async function fetchEvents() {
+  try {
+    const r = await fetch('/api/events');
+    const events = await r.json();
+    events.forEach(addEvent);
+  } catch {}
+}
+
+fetchDashboard();
+fetchEvents();
+setInterval(fetchDashboard, 5000);
+setInterval(fetchEvents, 2000);
+</script>
+</body>
+</html>
