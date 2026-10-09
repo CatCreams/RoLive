@@ -1,9 +1,9 @@
-const { WebcastPushConnection } = require('tiktok-live-connector');
+const { TikTokLiveConnection, WebcastEvent, ControlEvent } = require('tiktok-live-connector');
 
 const eventQueue = [];
-let connection = null;
-let username = null;
-let connected = false;
+let connection   = null;
+let username     = null;
+let connected    = false;
 
 function enqueue(type, payload) {
     eventQueue.push({ type, ts: Date.now(), ...payload });
@@ -12,15 +12,14 @@ function enqueue(type, payload) {
 
 function connect(user) {
     if (connection) connection.disconnect();
-    username = user;
+    username  = user;
     connected = false;
-    connection = new WebcastPushConnection(user, {
+
+    connection = new TikTokLiveConnection(user, {
         processInitialData: false,
         enableExtendedGiftInfo: true,
         signApiKey: process.env.EULER_API_KEY || '',
         sessionId: process.env.TIKTOK_SESSION_ID || '',
-        requestPollingIntervalMs: 2000,
-        enableWebsocketUpgrade: true,
     });
 
     connection.connect()
@@ -30,46 +29,46 @@ function connect(user) {
         })
         .catch(err => console.error(`[TikTok] Failed:`, err.message));
 
-    connection.on('gift', (data) => {
-        if (data.giftType === 1 && !data.repeatEnd) return;
+    connection.on(WebcastEvent.GIFT, (data) => {
+        if (data.giftDetails?.giftType === 1 && !data.repeatEnd) return;
         enqueue('gift', {
-            giftId: String(data.giftId),
-            giftName: data.giftName || 'unknown',
-            count: data.repeatCount || 1,
-            sender: data.nickname || 'unknown',
+            giftId:   String(data.giftId),
+            giftName: data.giftDetails?.giftName || 'unknown',
+            count:    data.repeatCount || 1,
+            sender:   data.user?.nickname || 'unknown',
         });
     });
 
-    connection.on('like', (data) => {
+    connection.on(WebcastEvent.LIKE, (data) => {
         enqueue('like', {
-            count: data.likeCount || 1,
-            sender: data.nickname || 'unknown',
+            count:  data.likeCount || 1,
+            sender: data.user?.nickname || 'unknown',
         });
     });
 
-    connection.on('chat', (data) => {
+    connection.on(WebcastEvent.CHAT, (data) => {
         enqueue('chat', {
             message: data.comment || '',
-            sender: data.nickname || 'unknown',
+            sender:  data.user?.nickname || 'unknown',
         });
     });
 
-    connection.on('disconnected', () => {
+    connection.on(ControlEvent.DISCONNECTED, () => {
         connected = false;
         console.warn(`[TikTok] Disconnected — retry in 10s`);
         setTimeout(() => { if (username) connect(username); }, 10000);
     });
 
-    connection.on('error', (err) => {
-        console.error('[TikTok] Error:', err.message);
+    connection.on(ControlEvent.ERROR, ({ info, exception }) => {
+        console.error('[TikTok] Error:', info, exception?.message);
     });
 }
 
 function disconnect() {
     if (connection) connection.disconnect();
     connection = null;
-    username = null;
-    connected = false;
+    username   = null;
+    connected  = false;
 }
 
 function poll(limit = 100) {
