@@ -1,244 +1,439 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TikLiveX Bridge</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0f0f0f; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; min-height: 100vh; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg:        #0b0b14;
+    --bg2:       #12121f;
+    --bg3:       #1a1a2e;
+    --border:    rgba(255,255,255,0.07);
+    --accent:    #7c3aed;
+    --accent2:   #a855f7;
+    --teal:      #06b6d4;
+    --green:     #22c55e;
+    --red:       #ef4444;
+    --gold:      #fbbf24;
+    --pink:      #f472b6;
+    --text:      #e2e8f0;
+    --muted:     #64748b;
+    --card-r:    14px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+  }
 
   header {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    padding: 20px 30px;
+    background: linear-gradient(135deg, #0f0f20 0%, #1a0533 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 64px;
     display: flex;
     align-items: center;
-    gap: 15px;
-    border-bottom: 1px solid #ffffff15;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
   }
-  header h1 { font-size: 1.4rem; font-weight: 700; color: #fff; }
-  header span { font-size: 0.8rem; color: #888; }
 
-  .badge {
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    border-radius: 10px;
+    display: grid; place-items: center;
+    font-size: 1.2rem;
   }
-  .badge.online  { background: #00ff8820; color: #00ff88; border: 1px solid #00ff8840; }
-  .badge.offline { background: #ff004420; color: #ff4444; border: 1px solid #ff004440; }
+  .logo h1 { font-size: 1.15rem; font-weight: 700; color: #fff; }
+  .logo p  { font-size: 0.72rem; color: var(--muted); }
 
-  .grid {
+  .header-right { display: flex; align-items: center; gap: 16px; }
+
+  .pill {
+    padding: 5px 14px; border-radius: 999px;
+    font-size: 0.73rem; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pill.online  { background: rgba(34,197,94,.12);  color: var(--green); border: 1px solid rgba(34,197,94,.25); }
+  .pill.offline { background: rgba(239,68,68,.12);  color: var(--red);   border: 1px solid rgba(239,68,68,.25); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  .roblox-btn {
+    background: linear-gradient(135deg, var(--accent), var(--teal));
+    color: #fff; border: none; padding: 7px 16px; border-radius: 8px;
+    font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    transition: opacity .2s;
+  }
+  .roblox-btn:hover { opacity: .85; }
+
+  .layout {
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 1fr 340px;
     gap: 20px;
-    padding: 20px 30px;
-    max-width: 1200px;
+    padding: 24px 28px;
+    max-width: 1400px;
     margin: 0 auto;
   }
 
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 16px 20px;
+    position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: var(--accent-color, var(--accent));
+  }
+  .stat-card .s-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
+  .stat-card .s-val   { font-size: 1.8rem; font-weight: 700; color: var(--accent-color, #fff); line-height: 1; }
+  .stat-card .s-sub   { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+  .stat-card .s-icon  { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 1.8rem; opacity: .15; }
+
+  .section-title {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .streamers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+  }
+
+  .streamer-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 16px; cursor: pointer;
+    transition: border-color .2s, transform .15s, box-shadow .2s;
+    position: relative; overflow: hidden;
+    text-decoration: none; display: block;
+  }
+  .streamer-card:hover {
+    border-color: var(--accent2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(124,58,237,.2);
+  }
+  .streamer-card.active-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(124,58,237,.08), rgba(6,182,212,.04));
+    pointer-events: none;
+  }
+  .streamer-card .live-dot {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--red); color: #fff;
+    font-size: 0.62rem; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px; letter-spacing: .5px;
+  }
+
+  .sc-top { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .sc-avatar {
+    width: 46px; height: 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 1.1rem; font-weight: 700; color: #fff;
+    flex-shrink: 0; border: 2px solid rgba(255,255,255,.1);
+  }
+  .sc-info .sc-name   { font-size: 0.92rem; font-weight: 700; color: #fff; }
+  .sc-info .sc-handle { font-size: 0.75rem; color: var(--accent2); margin-top: 1px; }
+
+  .sc-game {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.75rem; color: var(--muted); margin-bottom: 12px;
+  }
+
+  .sc-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    border-top: 1px solid var(--border); padding-top: 12px;
+  }
+  .sc-stat { text-align: center; }
+  .sc-stat .sv { font-size: 0.95rem; font-weight: 700; }
+  .sc-stat .sl { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+
+  .empty-state {
+    grid-column: 1 / -1; text-align: center;
+    padding: 60px 20px; color: var(--muted);
+  }
+  .empty-state .e-icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty-state p { font-size: 0.9rem; }
+
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
   .card {
-    background: #1a1a1a;
-    border: 1px solid #ffffff10;
-    border-radius: 12px;
-    padding: 20px;
-  }
-  .card h2 { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
-
-  .stat { margin-bottom: 15px; }
-  .stat .label { font-size: 0.75rem; color: #666; margin-bottom: 4px; }
-  .stat .value { font-size: 1.5rem; font-weight: 700; color: #fff; }
-  .stat .value.green { color: #00ff88; }
-  .stat .value.red   { color: #ff4444; }
-
-  .roblox-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: #00b4ff15;
-    border: 1px solid #00b4ff30;
-    color: #00b4ff;
-    padding: 8px 14px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 0.85rem;
-    margin-top: 10px;
-    transition: background 0.2s;
-  }
-  .roblox-link:hover { background: #00b4ff25; }
-
-  .feed { display: flex; flex-direction: column; gap: 8px; max-height: 600px; overflow-y: auto; }
-  .event-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    background: #222;
-    border-radius: 8px;
-    padding: 10px 14px;
-    border-left: 3px solid transparent;
-    animation: fadeIn 0.3s ease;
-  }
-  .event-item.gift { border-color: #ffd700; }
-  .event-item.like { border-color: #ff4d6d; }
-  .event-item.chat { border-color: #00b4ff; }
-
-  .event-icon { font-size: 1.1rem; margin-top: 1px; }
-  .event-body { flex: 1; }
-  .event-sender { font-size: 0.8rem; font-weight: 600; color: #ccc; }
-  .event-detail { font-size: 0.85rem; color: #888; margin-top: 2px; }
-  .event-detail b { color: #ffd700; }
-
-  .gift-badge {
-    background: #ffd70020;
-    color: #ffd700;
-    border: 1px solid #ffd70040;
-    border-radius: 6px;
-    padding: 2px 8px;
-    font-size: 0.75rem;
-    font-weight: 700;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--card-r);
+    padding: 18px;
   }
 
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; } }
+  .feed-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .feed-header .title { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+  .feed-count {
+    background: rgba(124,58,237,.2); color: var(--accent2);
+    font-size: 0.7rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px;
+  }
 
-  .uptime { font-size: 0.75rem; color: #444; margin-top: 15px; }
+  .feed { display: flex; flex-direction: column; gap: 7px; max-height: 480px; overflow-y: auto; }
+
+  .ev {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--bg3); border-radius: 9px;
+    padding: 9px 12px; border-left: 2px solid transparent;
+    animation: slideIn .25s ease;
+  }
+  .ev.gift { border-color: var(--gold); }
+  .ev.like { border-color: var(--pink); }
+  .ev.chat { border-color: var(--teal); }
+
+  @keyframes slideIn { from{opacity:0;transform:translateY(-6px)}to{opacity:1} }
+
+  .ev-icon { font-size: 1rem; flex-shrink: 0; }
+  .ev-body { flex: 1; min-width: 0; }
+  .ev-who  { font-size: 0.72rem; font-weight: 600; color: #cbd5e1; }
+  .ev-who span { color: var(--accent2); font-size: 0.65rem; margin-left: 4px; }
+  .ev-detail { font-size: 0.78rem; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev-detail b { color: var(--gold); }
+
+  .rb-playing { display: flex; align-items: baseline; gap: 6px; }
+  .rb-num   { font-size: 2.2rem; font-weight: 700; color: var(--teal); }
+  .rb-label { font-size: 0.78rem; color: var(--muted); }
 
   ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: #111; }
-  ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>🚀 TikLiveX Bridge</h1>
-    <span>TikTok × Roblox Live Integration</span>
+  <div class="logo">
+    <div class="logo-icon">🚀</div>
+    <div>
+      <h1>TikLiveX Bridge</h1>
+      <p>TikTok × Roblox Multi-Session</p>
+    </div>
   </div>
-  <div id="tiktok-badge" class="badge offline">● Offline</div>
+  <div class="header-right">
+    <div id="global-badge" class="pill offline"><span class="dot"></span> <span id="badge-text">0 Live</span></div>
+    <a class="roblox-btn" id="rb-link" href="https://www.roblox.com/games/82169529818788" target="_blank">🎮 Open Game</a>
+  </div>
 </header>
 
-<div class="grid">
-  <div style="display:flex;flex-direction:column;gap:16px;">
-
-    <div class="card">
-      <h2>TikTok Live</h2>
-      <div class="stat">
-        <div class="label">Username</div>
-        <div class="value" id="tt-username" style="font-size:1.1rem">—</div>
+<div class="layout">
+  <div>
+    <div class="stats-bar">
+      <div class="stat-card" style="--accent-color: var(--accent2)">
+        <div class="s-icon">🎭</div>
+        <div class="s-label">Streamer Aktif</div>
+        <div class="s-val" id="s-sessions">0</div>
+        <div class="s-sub">live sekarang</div>
       </div>
-      <div class="stat">
-        <div class="label">Status</div>
-        <div class="value" id="tt-status">—</div>
+      <div class="stat-card" style="--accent-color: var(--gold)">
+        <div class="s-icon">🎁</div>
+        <div class="s-label">Total Gift</div>
+        <div class="s-val" id="s-gift">0</div>
+        <div class="s-sub">sesi ini</div>
       </div>
-      <div class="stat">
-        <div class="label">Queue</div>
-        <div class="value" id="tt-queue" style="font-size:1.1rem">0</div>
+      <div class="stat-card" style="--accent-color: var(--pink)">
+        <div class="s-icon">❤️</div>
+        <div class="s-label">Total Like</div>
+        <div class="s-val" id="s-like">0</div>
+        <div class="s-sub">sesi ini</div>
       </div>
-    </div>
-
-    <div class="card">
-      <h2>Roblox Game</h2>
-      <div class="stat">
-        <div class="label">Players Online</div>
-        <div class="value green" id="rb-playing">—</div>
-      </div>
-      <a class="roblox-link" href="https://www.roblox.com/games/82169529818788" target="_blank">
-        🎮 Open Game
-      </a>
-    </div>
-
-    <div class="card">
-      <h2>Stats Session</h2>
-      <div class="stat">
-        <div class="label">Total Gift</div>
-        <div class="value" id="stat-gift" style="font-size:1.1rem;color:#ffd700">0</div>
-      </div>
-      <div class="stat">
-        <div class="label">Total Like</div>
-        <div class="value" id="stat-like" style="font-size:1.1rem;color:#ff4d6d">0</div>
-      </div>
-      <div class="stat">
-        <div class="label">Total Chat</div>
-        <div class="value" id="stat-chat" style="font-size:1.1rem;color:#00b4ff">0</div>
+      <div class="stat-card" style="--accent-color: var(--teal)">
+        <div class="s-icon">💬</div>
+        <div class="s-label">Total Chat</div>
+        <div class="s-val" id="s-chat">0</div>
+        <div class="s-sub">sesi ini</div>
       </div>
     </div>
 
+    <div class="section-title">🎙️ Streamers Live</div>
+    <div class="streamers-grid" id="streamers-grid">
+      <div class="empty-state">
+        <div class="e-icon">🌙</div>
+        <p>Belum ada streamer aktif.<br>Start session dari game Roblox.</p>
+      </div>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>Live Event Feed</h2>
-    <div class="feed" id="feed"></div>
+  <div class="sidebar">
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">🎮 Roblox Game</div>
+      <div class="rb-playing">
+        <div class="rb-num" id="rb-playing">—</div>
+        <div class="rb-label">players online</div>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1">
+      <div class="feed-header">
+        <div class="title">⚡ Live Feed</div>
+        <div class="feed-count" id="feed-count">0</div>
+      </div>
+      <div class="feed" id="feed"></div>
+    </div>
   </div>
 </div>
 
 <script>
-const feed = document.getElementById('feed');
-let stats = { gift: 0, like: 0, chat: 0 };
-let seenTs = new Set();
+let feedCount  = 0;
+let seenKeys   = new Set();
+let totalStats = { gift: 0, like: 0, chat: 0 };
 
-function iconFor(type) {
-  return type === 'gift' ? '🎁' : type === 'like' ? '❤️' : '💬';
+function fmt(n) {
+  return n >= 1000 ? (n/1000).toFixed(1) + 'k' : n;
+}
+
+function initials(u) {
+  return u.slice(0, 2).toUpperCase();
+}
+
+function gradient(u) {
+  const g = [
+    ['#7c3aed','#06b6d4'], ['#db2777','#f59e0b'],
+    ['#059669','#3b82f6'], ['#dc2626','#f97316'],
+    ['#7c3aed','#ec4899'], ['#0891b2','#10b981'],
+  ];
+  let h = 0;
+  for (const c of u) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  const [a, b] = g[h % g.length];
+  return `linear-gradient(135deg,${a},${b})`;
+}
+
+function renderGrid(data) {
+  const grid = document.getElementById('streamers-grid');
+  if (!data.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="e-icon">🌙</div><p>Belum ada streamer aktif.<br>Start session dari game Roblox.</p></div>`;
+    document.getElementById('s-sessions').textContent = 0;
+    return;
+  }
+
+  let tg = 0, tl = 0, tc = 0, live = 0;
+  const html = data.map(s => {
+    tg += s.stats?.gift || 0;
+    tl += s.stats?.like || 0;
+    tc += s.stats?.chat || 0;
+    if (s.connected) live++;
+
+    return `
+    <a class="streamer-card ${s.connected ? 'active-card' : ''}"
+       href="https://www.tiktok.com/@${s.username}/live" target="_blank">
+      ${s.connected ? '<div class="live-dot">● LIVE</div>' : ''}
+      <div class="sc-top">
+        <div class="sc-avatar" style="background:${gradient(s.username)}">${initials(s.username)}</div>
+        <div class="sc-info">
+          <div class="sc-name">${s.username}</div>
+          <div class="sc-handle">@${s.username}</div>
+        </div>
+      </div>
+      <div class="sc-game">🎮 Roblox &nbsp;·&nbsp;
+        <span style="color:${s.connected ? 'var(--green)' : 'var(--muted)'}">
+          ${s.connected ? 'Connected' : 'Offline'}
+        </span>
+      </div>
+      <div class="sc-stats">
+        <div class="sc-stat"><div class="sv" style="color:var(--gold)">${fmt(s.stats?.gift||0)}</div><div class="sl">🎁 Gift</div></div>
+        <div class="sc-stat"><div class="sv" style="color:var(--pink)">${fmt(s.stats?.like||0)}</div><div class="sl">❤️ Like</div></div>
+        <div class="sc-stat"><div class="sv" style="color:var(--teal)">${fmt(s.stats?.chat||0)}</div><div class="sl">💬 Chat</div></div>
+      </div>
+    </a>`;
+  }).join('');
+
+  grid.innerHTML = html;
+  document.getElementById('s-gift').textContent = fmt(tg);
+  document.getElementById('s-like').textContent = fmt(tl);
+  document.getElementById('s-chat').textContent = fmt(tc);
+  document.getElementById('s-sessions').textContent = live;
+
+  const badge = document.getElementById('global-badge');
+  badge.className = live > 0 ? 'pill online' : 'pill offline';
+  document.getElementById('badge-text').textContent = `${live} Live`;
 }
 
 function addEvent(ev) {
-  const key = `${ev.type}-${ev.ts}-${ev.sender}`;
-  if (seenTs.has(key)) return;
-  seenTs.add(key);
+  const key = `${ev.type}-${ev.ts||''}-${ev.sender}-${ev.username}`;
+  if (seenKeys.has(key)) return;
+  seenKeys.add(key);
 
-  stats[ev.type] = (stats[ev.type] || 0) + 1;
-  document.getElementById('stat-' + ev.type).textContent = stats[ev.type];
+  feedCount++;
+  document.getElementById('feed-count').textContent = feedCount;
+
+  const icon = ev.type === 'gift' ? '🎁' : ev.type === 'like' ? '❤️' : '💬';
+  let detail = ev.type === 'gift' ? `<b>${ev.giftName}</b> x${ev.count}`
+             : ev.type === 'like' ? `liked ❤️ x${ev.count}`
+             : (ev.message || '');
 
   const el = document.createElement('div');
-  el.className = `event-item ${ev.type}`;
-
-  let detail = '';
-  if (ev.type === 'gift') {
-    detail = `<span class="gift-badge">x${ev.count}</span> <b>${ev.giftName}</b> <span style="color:#666;font-size:0.75rem">#${ev.giftId}</span>`;
-  } else if (ev.type === 'like') {
-    detail = `liked <b style="color:#ff4d6d">x${ev.count}</b>`;
-  } else {
-    detail = `<span style="color:#aaa">${ev.message}</span>`;
-  }
-
+  el.className = `ev ${ev.type}`;
   el.innerHTML = `
-    <div class="event-icon">${iconFor(ev.type)}</div>
-    <div class="event-body">
-      <div class="event-sender">${ev.sender}</div>
-      <div class="event-detail">${detail}</div>
-    </div>
-  `;
+    <div class="ev-icon">${icon}</div>
+    <div class="ev-body">
+      <div class="ev-who">${ev.sender||'—'}<span>via @${ev.username||'?'}</span></div>
+      <div class="ev-detail">${detail}</div>
+    </div>`;
 
+  const feed = document.getElementById('feed');
   feed.insertBefore(el, feed.firstChild);
-  if (feed.children.length > 100) feed.removeChild(feed.lastChild);
+  if (feed.children.length > 120) feed.removeChild(feed.lastChild);
 }
 
 async function fetchDashboard() {
   try {
     const r = await fetch('/api/dashboard');
+    if (!r.ok) return;
     const d = await r.json();
-
-    const tt = d.tiktok;
-    document.getElementById('tt-username').textContent = tt.username ? '@' + tt.username : '—';
-    document.getElementById('tt-status').textContent   = tt.connected ? 'Connected' : 'Disconnected';
-    document.getElementById('tt-status').className     = 'value ' + (tt.connected ? 'green' : 'red');
-    document.getElementById('tt-queue').textContent    = tt.queueLength;
-    document.getElementById('tiktok-badge').textContent = tt.connected ? '● Online' : '● Offline';
-    document.getElementById('tiktok-badge').className   = 'badge ' + (tt.connected ? 'online' : 'offline');
-    document.getElementById('rb-playing').textContent  = d.roblox.playing;
-  } catch {}
+    renderGrid(d.sessions || []);
+    document.getElementById('rb-playing').textContent = d.roblox?.playing ?? '—';
+    document.getElementById('rb-link').href = d.roblox?.url || '#';
+  } catch (e) {
+    console.warn('Dashboard fetch failed:', e);
+  }
 }
 
 async function fetchEvents() {
   try {
     const r = await fetch('/api/events');
+    if (!r.ok) return;
     const events = await r.json();
-    events.forEach(addEvent);
+    events.slice(-20).forEach(addEvent);
   } catch {}
 }
 
 fetchDashboard();
 fetchEvents();
-setInterval(fetchDashboard, 5000);
+setInterval(fetchDashboard, 4000);
 setInterval(fetchEvents, 2000);
 </script>
 </body>
