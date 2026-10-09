@@ -113,10 +113,18 @@ async def _run(username: str):
 
     @client.on(CommentEvent)
     async def on_comment(event):
+        print(f"[DEBUG COMMENT] triggered: {event.__dict__}")
         enqueue(username, "chat", {
             "message": event.comment or "",
             "sender":  event.user.nickname or "unknown",
         })
+
+    # tangkap semua event untuk debug
+    @client.on("*")
+    async def on_any(event):
+        name = type(event).__name__
+        if name not in ("ConnectEvent", "DisconnectEvent", "LikeEvent", "GiftEvent", "CommentEvent"):
+            print(f"[DEBUG UNKNOWN] {name}")
 
     try:
         await client.connect()
