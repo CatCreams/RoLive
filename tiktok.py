@@ -25,11 +25,16 @@ sessions: dict = {}
 # ── Roblox Push ──────────────────────────────────────────────────────────────
 
 async def push_to_roblox(event: dict):
-    api_key = os.environ.get("ROBLOX_API_KEY", "")
-    universe_id = os.environ.get("UNIVERSE_ID", UNIVERSE_ID)
+    api_key = os.environ.get("ROBLOX_API_KEY", "").strip()  # tambah .strip()
+    universe_id = os.environ.get("UNIVERSE_ID", "82169529818788").strip()
+    
     if not api_key:
         print(f"[Push] SKIP — ROBLOX_API_KEY not set")
         return
+    
+    # Debug: print sebagian key untuk verifikasi
+    print(f"[Push] Using key: {api_key[:20]}...{api_key[-10:]}")
+    
     try:
         async with httpx.AsyncClient(timeout=5) as c:
             resp = await c.post(
@@ -40,12 +45,11 @@ async def push_to_roblox(event: dict):
                 },
                 json={"message": json.dumps(event)},
             )
-            print(f"[Push] OK status={resp.status_code} type={event.get('type')} user={event.get('username')}")
+            print(f"[Push] status={resp.status_code} type={event.get('type')}")
             if resp.status_code >= 400:
-                print(f"[Push] Error body: {resp.text}")
+                print(f"[Push] Error: {resp.text}")
     except Exception as e:
         print(f"[Push] Failed: {e}")
-
 
 # ── Enqueue ───────────────────────────────────────────────────────────────────
 
