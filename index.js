@@ -1,18 +1,21 @@
 const express = require('express');
 const tiktok  = require('./tiktok');
 
-const app    = express();
+const app     = express();
 const API_KEY = process.env.API_KEY || 'tiktok-reactive-gift-queue-129DJJ';
+const PORT    = process.env.PORT    || 8080;
 
 app.use(express.json());
 
 function auth(req, res, next) {
-    if (req.headers['x-api-key'] !== API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+    if (req.headers['x-api-key'] !== API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
     next();
 }
 
-app.get('/gifts/poll', auth, (req, res) => {
-    res.json(tiktok.giftQueue.splice(0, 50));
+app.get('/', (req, res) => {
+    res.send('TikLiveX Bridge is running 🚀');
 });
 
 app.post('/session/start', auth, (req, res) => {
@@ -24,12 +27,16 @@ app.post('/session/start', auth, (req, res) => {
 
 app.post('/session/stop', auth, (req, res) => {
     tiktok.disconnect();
-    tiktok.giftQueue.length = 0;
     res.json({ ok: true });
 });
 
-app.get('/status', auth, (req, res) => {
-    res.json({ queueLength: tiktok.giftQueue.length, uptime: process.uptime() });
+app.get('/events/poll', auth, (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 200);
+    res.json(tiktok.poll(limit));
 });
 
-app.listen(process.env.PORT || 8080, () => console.log(`[Server] Running`));
+app.get('/status', auth, (req, res) => {
+    res.json({ ...tiktok.status(), uptime: process.uptime() });
+});
+
+app.listen(PORT, () => console.log(`[Server] Running on :${PORT}`));
