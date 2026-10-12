@@ -22,7 +22,7 @@ except ImportError:
         CommentEvent = None
         print("[TikTok] WARNING: CommentEvent/ChatEvent tidak ditemukan!")
 
-UNIVERSE_ID     = os.environ.get("UNIVERSE_ID", "10769045965")
+UNIVERSE_ID     = os.environ.get("UNIVERSE_ID", "")
 ROBLOX_API_KEY  = os.environ.get("ROBLOX_API_KEY", "")
 MESSAGING_TOPIC = "TikTokEvents"
 
@@ -32,7 +32,7 @@ sessions: dict = {}
 
 async def push_to_roblox(event: dict):
     api_key = os.environ.get("ROBLOX_API_KEY", "").strip()
-    universe_id = os.environ.get("UNIVERSE_ID", "10769045965").strip()
+    universe_id = os.environ.get("UNIVERSE_ID", "").strip()
     if not api_key:
         print(f"[Push] SKIP — ROBLOX_API_KEY not set")
         return

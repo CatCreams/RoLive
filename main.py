@@ -9,8 +9,8 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 
 app = FastAPI()
-API_KEY     = os.environ.get("API_KEY", "tiktok-reactive-gift-queue-129DJJ")
-UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "82169529818788")
+API_KEY     = os.environ.get("API_KEY", "")
+UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
 
 def auth(request: Request):
