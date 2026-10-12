@@ -55,7 +55,7 @@ async def push_to_roblox(event: dict):
 
 
 def enqueue(username: str, type_: str, payload: dict):
-    event = {"type": type_, "username": username, "ts": time.time(), **payload}
+    event = {"type": type_, "username": username, "ts": time.time(), "timestamp": int(time.time()), **payload}
     event_queue.append(event)
     if len(event_queue) > 1000:
         event_queue.pop(0)
