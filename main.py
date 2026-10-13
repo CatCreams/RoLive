@@ -32,7 +32,8 @@ async def session_start(request: Request):
     username = body.get("username")
     if not username:
         raise HTTPException(status_code=400, detail="username required")
-    tiktok.connect(username)
+    async with tiktok._session_lock:
+        tiktok.connect(username)
     return {"ok": True, "username": username}
 
 
@@ -43,15 +44,15 @@ async def session_stop(request: Request):
         username = body.get("username")
     except Exception:
         username = None
-    tiktok.disconnect(username)
+    await tiktok.disconnect(username)
     return {"ok": True}
 
 
 # ── Event endpoints ───────────────────────────────────────────────────────────
 
 @app.get("/events/poll", dependencies=[Depends(auth)])
-def events_poll(limit: int = 100):
-    return tiktok.poll(min(limit, 200))
+async def events_poll(limit: int = 100):
+    return await tiktok.poll(min(limit, 200))
 
 
 @app.get("/api/events")

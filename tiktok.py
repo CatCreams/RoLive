@@ -1,6 +1,5 @@
 """
 tiktok.py — Multi-session TikTok Live manager
-Supports multiple concurrent streamers.
 """
 
 import asyncio
@@ -8,6 +7,7 @@ import os
 import httpx
 import json
 import time
+import uuid
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent, LikeEvent
 
@@ -25,43 +25,65 @@ except ImportError:
 UNIVERSE_ID     = os.environ.get("UNIVERSE_ID", "")
 ROBLOX_API_KEY  = os.environ.get("ROBLOX_API_KEY", "")
 MESSAGING_TOPIC = "TikTokEvents"
+MAX_QUEUE       = 1000
+PUSH_MAX_RETRY  = 3
+PUSH_RETRY_WAIT = 2.0
 
 event_queue: list = []
-sessions: dict = {}
+sessions: dict    = {}
+_queue_lock       = asyncio.Lock()
+_session_lock     = asyncio.Lock()
 
 
-async def push_to_roblox(event: dict):
-    api_key = os.environ.get("ROBLOX_API_KEY", "").strip()
+async def push_to_roblox(event: dict, attempt: int = 1):
+    api_key     = os.environ.get("ROBLOX_API_KEY", "").strip()
     universe_id = os.environ.get("UNIVERSE_ID", "").strip()
-    if not api_key:
-        print(f"[Push] SKIP — ROBLOX_API_KEY not set")
+    if not api_key or not universe_id:
+        print("[Push] SKIP — ROBLOX_API_KEY atau UNIVERSE_ID tidak di-set")
         return
-    print(f"[Push] Using key: {api_key[:20]}...{api_key[-10:]}")
     try:
         async with httpx.AsyncClient(timeout=5) as c:
             resp = await c.post(
                 f"https://apis.roblox.com/messaging-service/v1/universes/{universe_id}/topics/{MESSAGING_TOPIC}",
                 headers={
-                    "x-api-key": api_key,
+                    "x-api-key":    api_key,
                     "Content-Type": "application/json",
                 },
                 json={"message": json.dumps(event)},
             )
-            print(f"[Push] status={resp.status_code} type={event.get('type')}")
+            if resp.status_code == 429 or resp.status_code >= 500:
+                raise Exception(f"status={resp.status_code}")
             if resp.status_code >= 400:
-                print(f"[Push] Error: {resp.text}")
+                print(f"[Push] Error permanent: {resp.status_code} {resp.text}")
+                return
+            print(f"[Push] OK type={event.get('type')} id={event.get('eventId','?')}")
     except Exception as e:
-        print(f"[Push] Failed: {e}")
+        if attempt < PUSH_MAX_RETRY:
+            print(f"[Push] Retry {attempt}/{PUSH_MAX_RETRY}: {e}")
+            await asyncio.sleep(PUSH_RETRY_WAIT * attempt)
+            await push_to_roblox(event, attempt + 1)
+        else:
+            print(f"[Push] Gagal setelah {PUSH_MAX_RETRY} retry: {e}")
 
 
-def enqueue(username: str, type_: str, payload: dict):
-    event = {"type": type_, "username": username, "ts": time.time(), "timestamp": int(time.time()), **payload}
-    event_queue.append(event)
-    if len(event_queue) > 1000:
-        event_queue.pop(0)
+async def enqueue(username: str, type_: str, payload: dict):
+    event = {
+        "eventId":   str(uuid.uuid4()),
+        "type":      type_,
+        "username":  username,
+        "timestamp": int(time.time()),
+        **payload,
+    }
+
+    async with _queue_lock:
+        event_queue.append(event)
+        if len(event_queue) > MAX_QUEUE:
+            event_queue.pop(0)
+
     if username in sessions:
         s = sessions[username]["stats"]
         s[type_] = s.get(type_, 0) + 1
+
     loop = asyncio.get_event_loop()
     loop.create_task(push_to_roblox(event))
 
@@ -87,12 +109,9 @@ async def _run(username: str):
 
     @client.on(GiftEvent)
     async def on_gift(event):
-        print(f"[GIFT @{username}] id:{event.gift.id} name:{event.gift.name} "
-              f"streakable:{event.gift.streakable} repeat_end:{event.repeat_end} "
-              f"count:{event.repeat_count}")
         if event.gift.streakable and not event.repeat_end:
             return
-        enqueue(username, "gift", {
+        await enqueue(username, "gift", {
             "giftId":   str(event.gift.id),
             "giftName": event.gift.name or "unknown",
             "count":    event.repeat_count or 1,
@@ -101,7 +120,7 @@ async def _run(username: str):
 
     @client.on(LikeEvent)
     async def on_like(event):
-        enqueue(username, "like", {
+        await enqueue(username, "like", {
             "count":  event.count or 1,
             "sender": event.user.nickname or "unknown",
         })
@@ -109,15 +128,12 @@ async def _run(username: str):
     if CommentEvent:
         @client.on(CommentEvent)
         async def on_comment(event):
-            print(f"[DEBUG COMMENT] triggered sender={getattr(event.user, 'nickname', '?')}")
-            msg = getattr(event, "comment", None) or getattr(event, "message", None) or ""
+            msg    = getattr(event, "comment", None) or getattr(event, "message", None) or ""
             sender = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
-            enqueue(username, "chat", {
+            await enqueue(username, "chat", {
                 "message": msg,
                 "sender":  sender,
             })
-    else:
-        print(f"[TikTok] @{username} — chat tidak aktif, CommentEvent tidak tersedia")
 
     try:
         await client.connect()
@@ -145,19 +161,21 @@ def connect(username: str):
     sessions[username]["task"] = task
 
 
-def disconnect(username: str = None):
-    targets = [username.lstrip("@").lower()] if username else list(sessions.keys())
-    loop = asyncio.get_event_loop()
-    for user in targets:
-        sess = sessions.pop(user, None)
-        if sess and sess.get("client"):
-            loop.create_task(sess["client"].disconnect())
-        print(f"[TikTok] Disconnected: @{user}")
+async def disconnect(username: str = None):
+    async with _session_lock:
+        targets = [username.lstrip("@").lower()] if username else list(sessions.keys())
+        loop = asyncio.get_event_loop()
+        for user in targets:
+            sess = sessions.pop(user, None)
+            if sess and sess.get("client"):
+                loop.create_task(sess["client"].disconnect())
+            print(f"[TikTok] Disconnected: @{user}")
 
 
-def poll(limit: int = 100):
-    items = event_queue[:limit]
-    del event_queue[:limit]
+async def poll(limit: int = 100):
+    async with _queue_lock:
+        items = event_queue[:limit]
+        del event_queue[:limit]
     return items
 
 
