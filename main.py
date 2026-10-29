@@ -24,8 +24,6 @@ async def root():
         return f.read()
 
 
-# ── Session endpoints ─────────────────────────────────────────────────────────
-
 @app.post("/session/start", dependencies=[Depends(auth)])
 async def session_start(request: Request):
     body = await request.json()
@@ -48,7 +46,29 @@ async def session_stop(request: Request):
     return {"ok": True}
 
 
-# ── Event endpoints ───────────────────────────────────────────────────────────
+@app.post("/session/pause", dependencies=[Depends(auth)])
+async def session_pause(request: Request):
+    body = await request.json()
+    username = body.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+    ok = tiktok.pause(username)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session tidak ditemukan")
+    return {"ok": True, "paused": True}
+
+
+@app.post("/session/resume", dependencies=[Depends(auth)])
+async def session_resume(request: Request):
+    body = await request.json()
+    username = body.get("username")
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+    ok = tiktok.resume(username)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session tidak ditemukan")
+    return {"ok": True, "paused": False}
+
 
 @app.get("/events/poll", dependencies=[Depends(auth)])
 async def events_poll(limit: int = 100):
@@ -59,8 +79,6 @@ async def events_poll(limit: int = 100):
 async def public_events():
     return tiktok.peek(100)
 
-
-# ── Dashboard data ────────────────────────────────────────────────────────────
 
 @app.get("/api/dashboard")
 async def dashboard_data():

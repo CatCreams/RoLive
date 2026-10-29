@@ -67,6 +67,10 @@ async def push_to_roblox(event: dict, attempt: int = 1):
 
 
 async def enqueue(username: str, type_: str, payload: dict):
+    sess = sessions.get(username)
+    if sess and sess.get("paused"):
+        return
+
     event = {
         "eventId":   str(uuid.uuid4()),
         "type":      type_,
@@ -152,6 +156,7 @@ def connect(username: str):
     sessions[username] = {
         "client":    None,
         "connected": False,
+        "paused":    False,
         "task":      None,
         "stats":     {"gift": 0, "like": 0, "chat": 0},
         "joined_at": time.time(),
@@ -159,6 +164,26 @@ def connect(username: str):
     loop = asyncio.get_event_loop()
     task = loop.create_task(_run(username))
     sessions[username]["task"] = task
+
+
+def pause(username: str) -> bool:
+    username = username.lstrip("@").lower()
+    sess = sessions.get(username)
+    if not sess:
+        return False
+    sess["paused"] = True
+    print(f"[TikTok] Paused: @{username}")
+    return True
+
+
+def resume(username: str) -> bool:
+    username = username.lstrip("@").lower()
+    sess = sessions.get(username)
+    if not sess:
+        return False
+    sess["paused"] = False
+    print(f"[TikTok] Resumed: @{username}")
+    return True
 
 
 async def disconnect(username: str = None):
@@ -189,6 +214,7 @@ def list_sessions():
         result.append({
             "username":    user,
             "connected":   sess["connected"],
+            "paused":      sess.get("paused", False),
             "stats":       sess["stats"],
             "joined_at":   sess.get("joined_at"),
             "queueLength": len([e for e in event_queue if e.get("username") == user]),
@@ -201,7 +227,8 @@ def status():
         if sess["connected"]:
             return {
                 "connected":   True,
+                "paused":      sess.get("paused", False),
                 "username":    user,
                 "queueLength": len(event_queue),
             }
-    return {"connected": False, "username": None, "queueLength": len(event_queue)}
+    return {"connected": False, "paused": False, "username": None, "queueLength": len(event_queue)}
