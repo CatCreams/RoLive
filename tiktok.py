@@ -92,6 +92,71 @@ async def enqueue(username: str, type_: str, payload: dict):
     loop.create_task(push_to_roblox(event))
 
 
+def _extract_room_info(client: TikTokLiveClient, sess: dict):
+    """
+    Ekstrak viewer count, profile picture, dan cover/thumbnail dari room info client.
+    TikTokLive library menyimpan data room di client.room_info setelah connect.
+    """
+    try:
+        room_info = getattr(client, "room_info", None) or {}
+
+        # --- Viewer count ---
+        # Coba beberapa path yang mungkin ada di room_info
+        viewers = (
+            room_info.get("user_count", {}).get("value")
+            or room_info.get("stats", {}).get("total_user")
+            or room_info.get("viewer_count")
+            or None
+        )
+        if viewers is not None:
+            try:
+                sess["viewer_count"] = int(viewers)
+            except (TypeError, ValueError):
+                pass
+
+        # --- Profile picture ---
+        owner = room_info.get("owner", {}) or {}
+        avatar_thumb = (
+            owner.get("avatar_thumb", {}) or {}
+        )
+        avatar_urls = avatar_thumb.get("url_list", [])
+        if avatar_urls:
+            sess["profile_picture_url"] = avatar_urls[-1]  # ambil resolusi tertinggi
+        elif owner.get("avatar_larger", {}).get("url_list"):
+            sess["profile_picture_url"] = owner["avatar_larger"]["url_list"][-1]
+
+        # --- Cover / thumbnail live ---
+        cover = room_info.get("cover", {}) or {}
+        cover_urls = cover.get("url_list", [])
+        if cover_urls:
+            sess["cover_url"] = cover_urls[-1]
+        else:
+            # fallback: share_info thumbnail
+            share_info = room_info.get("share_info", {}) or {}
+            thumb = share_info.get("cover", {}) or {}
+            thumb_urls = thumb.get("url_list", [])
+            if thumb_urls:
+                sess["cover_url"] = thumb_urls[-1]
+
+    except Exception as e:
+        print(f"[RoomInfo] Gagal ekstrak room info: {e}")
+
+
+async def _poll_room_info(username: str):
+    """
+    Poll viewer count setiap 10 detik selama session aktif.
+    Dipanggil sebagai background task setelah connect.
+    """
+    while True:
+        await asyncio.sleep(10)
+        sess = sessions.get(username)
+        if not sess or not sess.get("connected"):
+            break
+        client = sess.get("client")
+        if client:
+            _extract_room_info(client, sess)
+
+
 async def _run(username: str):
     sess = sessions.get(username)
     if not sess:
@@ -105,6 +170,11 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
+        # Ekstrak room info pertama kali saat connect
+        _extract_room_info(client, sess)
+        # Mulai background polling viewer count
+        loop = asyncio.get_event_loop()
+        loop.create_task(_poll_room_info(username))
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
@@ -154,12 +224,15 @@ def connect(username: str):
             print(f"[TikTok] @{username} already active")
             return
     sessions[username] = {
-        "client":    None,
-        "connected": False,
-        "paused":    False,
-        "task":      None,
-        "stats":     {"gift": 0, "like": 0, "chat": 0},
-        "joined_at": time.time(),
+        "client":              None,
+        "connected":           False,
+        "paused":              False,
+        "task":                None,
+        "stats":               {"gift": 0, "like": 0, "chat": 0},
+        "joined_at":           time.time(),
+        "viewer_count":        None,  # diisi saat connect
+        "profile_picture_url": None,  # diisi saat connect
+        "cover_url":           None,  # diisi saat connect
     }
     loop = asyncio.get_event_loop()
     task = loop.create_task(_run(username))
@@ -212,12 +285,16 @@ def list_sessions():
     result = []
     for user, sess in sessions.items():
         result.append({
-            "username":    user,
-            "connected":   sess["connected"],
-            "paused":      sess.get("paused", False),
-            "stats":       sess["stats"],
-            "joined_at":   sess.get("joined_at"),
-            "queueLength": len([e for e in event_queue if e.get("username") == user]),
+            "username":           user,
+            "connected":          sess["connected"],
+            "paused":             sess.get("paused", False),
+            "stats":              sess["stats"],
+            "joined_at":          sess.get("joined_at"),
+            "queueLength":        len([e for e in event_queue if e.get("username") == user]),
+            # Field baru — viewer count & gambar
+            "viewer_count":       sess.get("viewer_count"),
+            "profilePictureUrl":  sess.get("profile_picture_url"),
+            "coverUrl":           sess.get("cover_url"),
         })
     return result
 
