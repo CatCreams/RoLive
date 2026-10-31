@@ -7,8 +7,17 @@ import tiktok
 
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 API_KEY     = os.environ.get("API_KEY", "")
 UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
@@ -88,9 +97,10 @@ async def dashboard_data():
             r = await client.get(
                 f"https://games.roblox.com/v1/games?universeIds={UNIVERSE_ID}"
             )
-            data = r.json()
-            roblox_playing = data["data"][0].get("playing", 0)
-    except:
+            if r.status_code == 200:
+                data = r.json()
+                roblox_playing = data["data"][0].get("playing", 0)
+    except Exception:
         pass
 
     return {
@@ -109,22 +119,42 @@ async def dashboard_data():
 async def api_sessions():
     return tiktok.list_sessions()
 
-@app.get("/api/debug/viewers")
-async def debug_viewers():
-    result = {}
-    for user, sess in tiktok.sessions.items():
-        client = sess.get("client")
-        result[user] = {
-            "viewer_count": sess.get("viewer_count"),
-            "raw_fields": {}
-        }
-        if client:
+
+@app.post("/api/roblox/lookup")
+async def roblox_lookup(request: Request):
+    body = await request.json()
+    username = body.get("username", "")
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.post(
+                "https://users.roblox.com/v1/usernames/users",
+                json={"usernames": [username], "excludeBannedUsers": True},
+                headers={"Content-Type": "application/json"},
+            )
+            if not r.is_success:
+                raise HTTPException(status_code=502, detail="Roblox API error")
+            data = r.json()
+            user = data.get("data", [None])[0]
+            if not user:
+                raise HTTPException(status_code=404, detail="Username Roblox tidak ditemukan")
+
+            avatar = None
             try:
-                from TikTokLive.events import RoomUserSeqEvent
-                result[user]["RoomUserSeqEvent_available"] = True
-            except:
-                result[user]["RoomUserSeqEvent_available"] = False
-    return result
+                img = await c.get(
+                    f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user['id']}&size=150x150&format=Png&isCircular=false"
+                )
+                if img.is_success:
+                    avatar = img.json()["data"][0]["imageUrl"]
+            except Exception:
+                pass
+
+            return {"id": user["id"], "name": user["name"], "avatar": avatar}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Gagal menjangkau Roblox: {e}")
 
 
 if __name__ == "__main__":
