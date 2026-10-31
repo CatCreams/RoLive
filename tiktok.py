@@ -37,38 +37,6 @@ _queue_lock       = asyncio.Lock()
 _session_lock     = asyncio.Lock()
 
 
-async def _fetch_profile(username: str, room_id: str, sess: dict):
-    try:
-        url = f"https://www.tiktok.com/api/live/detail/?aid=1988&roomID={room_id}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": "https://www.tiktok.com/",
-        }
-        async with httpx.AsyncClient(timeout=10, headers=headers) as c:
-            r = await c.get(url)
-            data = r.json()
-
-        print(f"[DEBUG FetchProfile] @{username}: {json.dumps(data)[:500]}")
-
-        owner = data.get("LiveRoomInfo", {}).get("ownerInfo", {})
-        avatar = (
-            owner.get("avatarThumb")
-            or owner.get("avatarMedium")
-            or (owner.get("avatar168x168", {}) or {}).get("urlList", [None])[0]
-        )
-        if avatar:
-            sess["profile_picture_url"] = avatar
-            print(f"[TikTok] Profile pic @{username}: {avatar[:80]}")
-
-        cover_list = data.get("LiveRoomInfo", {}).get("coverUrl", [])
-        if cover_list:
-            sess["cover_url"] = cover_list[0] if isinstance(cover_list, list) else cover_list
-            print(f"[TikTok] Cover @{username}: {str(sess['cover_url'])[:80]}")
-
-    except Exception as e:
-        print(f"[FetchProfile] Gagal @{username}: {e}")
-
-
 async def push_to_roblox(event: dict, attempt: int = 1):
     api_key     = os.environ.get("ROBLOX_API_KEY", "").strip()
     universe_id = os.environ.get("UNIVERSE_ID", "").strip()
@@ -125,15 +93,30 @@ async def _run(username: str):
     client = TikTokLiveClient(unique_id=username)
     sess["client"] = client
 
+    def _try_save_streamer_profile(event):
+        """Ambil foto profil streamer dari event kalau belum ada."""
+        if sess.get("profile_picture_url"):
+            return
+        try:
+            user = getattr(event, "user", None)
+            if not user:
+                return
+            uid = (getattr(user, "unique_id", "") or getattr(user, "uniqueId", "") or "").lower()
+            if uid != username:
+                return
+            avatar = getattr(user, "avatar_thumb", None) or getattr(user, "avatar", None)
+            urls = getattr(avatar, "url_list", [])
+            if urls:
+                sess["profile_picture_url"] = urls[-1]
+                print(f"[TikTok] Avatar @{username}: {urls[-1][:80]}")
+        except Exception:
+            pass
+
     @client.on(ConnectEvent)
     async def on_connect(event):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
-        room_id = getattr(event, "room_id", None) or getattr(event, "roomId", None)
-        if room_id:
-            loop = asyncio.get_event_loop()
-            loop.create_task(_fetch_profile(username, str(room_id), sess))
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
@@ -149,6 +132,7 @@ async def _run(username: str):
 
     @client.on(GiftEvent)
     async def on_gift(event):
+        _try_save_streamer_profile(event)
         if event.gift.streakable and not event.repeat_end:
             return
         await enqueue(username, "gift", {
@@ -160,6 +144,7 @@ async def _run(username: str):
 
     @client.on(LikeEvent)
     async def on_like(event):
+        _try_save_streamer_profile(event)
         await enqueue(username, "like", {
             "count":  event.count or 1,
             "sender": event.user.nickname or "unknown",
@@ -168,6 +153,7 @@ async def _run(username: str):
     if CommentEvent:
         @client.on(CommentEvent)
         async def on_comment(event):
+            _try_save_streamer_profile(event)
             msg    = getattr(event, "comment", None) or getattr(event, "message", None) or ""
             sender = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
             await enqueue(username, "chat", {"message": msg, "sender": sender})
