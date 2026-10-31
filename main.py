@@ -1,12 +1,13 @@
 import asyncio
 import os
+import re
 import time
 import httpx
 import uvicorn
 import tiktok
 
 from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -21,6 +22,8 @@ app.add_middleware(
 API_KEY     = os.environ.get("API_KEY", "")
 UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
+TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us)?\.com/")
+
 
 def auth(request: Request):
     if request.headers.get("x-api-key") != API_KEY:
@@ -32,6 +35,34 @@ async def root():
     with open("dashboard.html", "r", encoding="utf-8") as f:
         return f.read()
 
+
+# ─── Image Proxy ────────────────────────────────────────────────────────────
+
+@app.get("/api/image-proxy")
+async def image_proxy(url: str):
+    if not url or not TIKTOK_CDN_RE.match(url):
+        raise HTTPException(status_code=400, detail="URL tidak valid atau domain tidak diizinkan")
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
+            r = await c.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; RoLive/1.0)",
+                "Referer":    "https://www.tiktok.com/",
+            })
+            if not r.is_success:
+                raise HTTPException(status_code=502, detail="Gagal fetch gambar dari CDN")
+            content_type = r.headers.get("content-type", "image/jpeg")
+            return StreamingResponse(
+                iter([r.content]),
+                media_type=content_type,
+                headers={"Cache-Control": "public, max-age=300"},
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="Gagal menghubungi CDN TikTok")
+
+
+# ─── Session ─────────────────────────────────────────────────────────────────
 
 @app.post("/session/start", dependencies=[Depends(auth)])
 async def session_start(request: Request):
@@ -78,6 +109,8 @@ async def session_resume(request: Request):
         raise HTTPException(status_code=404, detail="Session tidak ditemukan")
     return {"ok": True, "paused": False}
 
+
+# ─── Public API ──────────────────────────────────────────────────────────────
 
 @app.get("/events/poll", dependencies=[Depends(auth)])
 async def events_poll(limit: int = 100):
