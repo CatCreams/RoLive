@@ -4,6 +4,7 @@ tiktok.py — Multi-session TikTok Live manager
 
 import asyncio
 import os
+import re
 import httpx
 import json
 import time
@@ -33,7 +34,6 @@ PUSH_RETRY_WAIT = 2.0
 
 event_queue: list = []
 sessions: dict    = {}
-# Cache avatar per-user: {"username": "https://..."}
 avatar_cache: dict = {}
 _queue_lock        = asyncio.Lock()
 _session_lock      = asyncio.Lock()
@@ -62,8 +62,46 @@ async def push_to_roblox(event: dict, attempt: int = 1):
             await push_to_roblox(event, attempt + 1)
 
 
+async def _fetch_streamer_avatar(username: str):
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        }) as c:
+            r = await c.get(f"https://www.tiktok.com/@{username}")
+            if not r.is_success:
+                print(f"[Avatar] HTTP {r.status_code} for @{username}")
+                return
+
+            print(f"[Debug] HTML snippet @{username}: {r.text[5000:6000]}")
+
+            # avatar
+            m = re.search(r'"avatarThumb":\{"urlList":\["([^"]+)"', r.text)
+            if not m:
+                m = re.search(r'"avatar_thumb":\{"url_list":\["([^"]+)"', r.text)
+            if m:
+                url = m.group(1).replace("\\u002F", "/")
+                avatar_cache[username] = url
+                print(f"[Avatar] Streamer @{username}: {url[:80]}")
+            else:
+                print(f"[Avatar] No match for @{username}")
+
+            # cover stream
+            cm = re.search(r'"coverUrl":\{"urlList":\["([^"]+)"', r.text)
+            if not cm:
+                cm = re.search(r'"roomCover":\{"urlList":\["([^"]+)"', r.text)
+            if cm:
+                url = cm.group(1).replace("\\u002F", "/")
+                if username in sessions:
+                    sessions[username]["coverUrl"] = url
+                print(f"[Cover] Stream @{username}: {url[:80]}")
+            else:
+                print(f"[Cover] No match for @{username}")
+
+    except Exception as e:
+        print(f"[Avatar] Streamer fetch failed @{username}: {e}")
+
+
 def _extract_avatar(user_obj) -> str | None:
-    """Ambil URL avatar terbaik dari user object TikTokLive."""
     if not user_obj:
         return None
     for attr in ("avatar_thumb", "avatar_medium", "avatar", "avatar_larger"):
@@ -76,7 +114,6 @@ def _extract_avatar(user_obj) -> str | None:
 
 
 def _cache_avatar(user_obj):
-    """Simpan avatar user ke avatar_cache global."""
     if not user_obj:
         return
     uid = (
@@ -130,11 +167,12 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
+        loop = asyncio.get_event_loop()
+        loop.create_task(_fetch_streamer_avatar(username))
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
         sess["connected"] = False
-        # Pertahankan avatar streamer di cache meski disconnect
         print(f"[TikTok] Disconnected: @{username}")
 
     if RoomUserSeqEvent:
@@ -146,7 +184,6 @@ async def _run(username: str):
 
     @client.on(GiftEvent)
     async def on_gift(event):
-        # Cache avatar streamer + sender
         _cache_avatar(getattr(event, "user", None))
         if event.gift.streakable and not event.repeat_end:
             return
@@ -172,8 +209,8 @@ async def _run(username: str):
         @client.on(CommentEvent)
         async def on_comment(event):
             _cache_avatar(getattr(event, "user", None))
-            msg       = getattr(event, "comment", None) or getattr(event, "message", None) or ""
-            sender    = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
+            msg        = getattr(event, "comment", None) or getattr(event, "message", None) or ""
+            sender     = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
             sender_uid = (getattr(event.user, "unique_id", "") or "").lower().lstrip("@") if hasattr(event, "user") else ""
             await enqueue(username, "chat", {
                 "message":      msg,
@@ -204,6 +241,7 @@ def connect(username: str):
         "stats":        {"gift": 0, "like": 0, "chat": 0},
         "joined_at":    time.time(),
         "viewer_count": None,
+        "coverUrl":     None,
     }
     loop = asyncio.get_event_loop()
     task = loop.create_task(_run(username))
@@ -258,9 +296,8 @@ def list_sessions():
             "joined_at":         sess.get("joined_at"),
             "queueLength":       len([e for e in event_queue if e.get("username") == user]),
             "viewer_count":      sess.get("viewer_count"),
-            # Avatar streamer dari cache global
             "profilePictureUrl": avatar_cache.get(user),
-            "coverUrl":          None,
+            "coverUrl":          sess.get("coverUrl"),
         })
     return result
 
