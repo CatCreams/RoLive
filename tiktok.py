@@ -39,17 +39,6 @@ _session_lock     = asyncio.Lock()
 
 def _extract(room, sess: dict):
     try:
-        vc = (
-            getattr(getattr(room, "user_count", None), "value", None)
-            or getattr(getattr(room, "stats", None), "total_user", None)
-            or getattr(room, "viewer_count", None)
-        )
-        if vc:
-            sess["viewer_count"] = int(vc)
-    except Exception:
-        pass
-
-    try:
         owner  = getattr(room, "owner", None)
         avatar = getattr(owner, "avatar_thumb", None) or getattr(owner, "avatar_medium", None)
         urls   = getattr(avatar, "url_list", [])
@@ -65,6 +54,27 @@ def _extract(room, sess: dict):
             sess["cover_url"] = urls[-1]
     except Exception:
         pass
+
+
+def _debug_obj(obj, label: str, username: str, depth: int = 0):
+    """Print semua field primitif + satu level nested object."""
+    if obj is None or depth > 1:
+        return
+    fields = {}
+    nested = {}
+    for k in dir(obj):
+        if k.startswith("_"):
+            continue
+        try:
+            v = getattr(obj, k)
+            if isinstance(v, (int, float, str, bool)):
+                fields[k] = v
+            elif not callable(v):
+                nested[k] = type(v).__name__ + ": " + str(v)[:80]
+        except:
+            pass
+    print(f"[DEBUG {label}] @{username} primitives: {fields}")
+    print(f"[DEBUG {label}] @{username} objects: {nested}")
 
 
 async def push_to_roblox(event: dict, attempt: int = 1):
@@ -128,9 +138,25 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
-        room = getattr(event, "room", None) or getattr(client, "room_info", None)
+
+        # Debug ConnectEvent
+        _debug_obj(event, "ConnectEvent", username)
+
+        # Debug room dari event
+        room = getattr(event, "room", None)
         if room:
-            _extract(room, sess)
+            print(f"[DEBUG] room from event: {type(room)}")
+            _debug_obj(room, "Room(event)", username)
+        
+        # Debug room dari client
+        client_room = getattr(client, "room_info", None)
+        if client_room:
+            print(f"[DEBUG] room from client.room_info: {type(client_room)}")
+            _debug_obj(client_room, "Room(client)", username)
+
+        r = room or client_room
+        if r:
+            _extract(r, sess)
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
@@ -140,18 +166,7 @@ async def _run(username: str):
     if RoomUserSeqEvent:
         @client.on(RoomUserSeqEvent)
         async def on_viewers(event):
-            fields = {}
-            for k in dir(event):
-                if k.startswith("_"):
-                    continue
-                try:
-                    v = getattr(event, k)
-                    if isinstance(v, (int, float, str, bool)):
-                        fields[k] = v
-                except:
-                    pass
-            print(f"[DEBUG RoomUserSeq] @{username}: {fields}")
-            vc = getattr(event, "viewer_count", None) or getattr(event, "total_user", None)
+            vc = getattr(event, "total", None)
             if vc is not None:
                 sess["viewer_count"] = max(0, int(vc))
 
