@@ -37,44 +37,36 @@ _queue_lock       = asyncio.Lock()
 _session_lock     = asyncio.Lock()
 
 
-def _extract(room, sess: dict):
+async def _fetch_profile(username: str, room_id: str, sess: dict):
     try:
-        owner  = getattr(room, "owner", None)
-        avatar = getattr(owner, "avatar_thumb", None) or getattr(owner, "avatar_medium", None)
-        urls   = getattr(avatar, "url_list", [])
-        if urls:
-            sess["profile_picture_url"] = urls[-1]
-    except Exception:
-        pass
+        url = f"https://www.tiktok.com/api/live/detail/?aid=1988&roomID={room_id}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.tiktok.com/",
+        }
+        async with httpx.AsyncClient(timeout=10, headers=headers) as c:
+            r = await c.get(url)
+            data = r.json()
 
-    try:
-        cover = getattr(room, "cover", None)
-        urls  = getattr(cover, "url_list", [])
-        if urls:
-            sess["cover_url"] = urls[-1]
-    except Exception:
-        pass
+        print(f"[DEBUG FetchProfile] @{username}: {json.dumps(data)[:500]}")
 
+        owner = data.get("LiveRoomInfo", {}).get("ownerInfo", {})
+        avatar = (
+            owner.get("avatarThumb")
+            or owner.get("avatarMedium")
+            or (owner.get("avatar168x168", {}) or {}).get("urlList", [None])[0]
+        )
+        if avatar:
+            sess["profile_picture_url"] = avatar
+            print(f"[TikTok] Profile pic @{username}: {avatar[:80]}")
 
-def _debug_obj(obj, label: str, username: str, depth: int = 0):
-    """Print semua field primitif + satu level nested object."""
-    if obj is None or depth > 1:
-        return
-    fields = {}
-    nested = {}
-    for k in dir(obj):
-        if k.startswith("_"):
-            continue
-        try:
-            v = getattr(obj, k)
-            if isinstance(v, (int, float, str, bool)):
-                fields[k] = v
-            elif not callable(v):
-                nested[k] = type(v).__name__ + ": " + str(v)[:80]
-        except:
-            pass
-    print(f"[DEBUG {label}] @{username} primitives: {fields}")
-    print(f"[DEBUG {label}] @{username} objects: {nested}")
+        cover_list = data.get("LiveRoomInfo", {}).get("coverUrl", [])
+        if cover_list:
+            sess["cover_url"] = cover_list[0] if isinstance(cover_list, list) else cover_list
+            print(f"[TikTok] Cover @{username}: {str(sess['cover_url'])[:80]}")
+
+    except Exception as e:
+        print(f"[FetchProfile] Gagal @{username}: {e}")
 
 
 async def push_to_roblox(event: dict, attempt: int = 1):
@@ -138,25 +130,10 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
-
-        # Debug ConnectEvent
-        _debug_obj(event, "ConnectEvent", username)
-
-        # Debug room dari event
-        room = getattr(event, "room", None)
-        if room:
-            print(f"[DEBUG] room from event: {type(room)}")
-            _debug_obj(room, "Room(event)", username)
-        
-        # Debug room dari client
-        client_room = getattr(client, "room_info", None)
-        if client_room:
-            print(f"[DEBUG] room from client.room_info: {type(client_room)}")
-            _debug_obj(client_room, "Room(client)", username)
-
-        r = room or client_room
-        if r:
-            _extract(r, sess)
+        room_id = getattr(event, "room_id", None) or getattr(event, "roomId", None)
+        if room_id:
+            loop = asyncio.get_event_loop()
+            loop.create_task(_fetch_profile(username, str(room_id), sess))
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
