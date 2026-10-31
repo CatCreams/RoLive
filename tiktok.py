@@ -33,8 +33,10 @@ PUSH_RETRY_WAIT = 2.0
 
 event_queue: list = []
 sessions: dict    = {}
-_queue_lock       = asyncio.Lock()
-_session_lock     = asyncio.Lock()
+# Cache avatar per-user: {"username": "https://..."}
+avatar_cache: dict = {}
+_queue_lock        = asyncio.Lock()
+_session_lock      = asyncio.Lock()
 
 
 async def push_to_roblox(event: dict, attempt: int = 1):
@@ -58,6 +60,36 @@ async def push_to_roblox(event: dict, attempt: int = 1):
         if attempt < PUSH_MAX_RETRY:
             await asyncio.sleep(PUSH_RETRY_WAIT * attempt)
             await push_to_roblox(event, attempt + 1)
+
+
+def _extract_avatar(user_obj) -> str | None:
+    """Ambil URL avatar terbaik dari user object TikTokLive."""
+    if not user_obj:
+        return None
+    for attr in ("avatar_thumb", "avatar_medium", "avatar", "avatar_larger"):
+        obj = getattr(user_obj, attr, None)
+        if obj:
+            urls = getattr(obj, "url_list", [])
+            if urls:
+                return urls[-1]
+    return None
+
+
+def _cache_avatar(user_obj):
+    """Simpan avatar user ke avatar_cache global."""
+    if not user_obj:
+        return
+    uid = (
+        getattr(user_obj, "unique_id", "")
+        or getattr(user_obj, "uniqueId", "")
+        or ""
+    ).lower().lstrip("@")
+    if not uid or uid in avatar_cache:
+        return
+    url = _extract_avatar(user_obj)
+    if url:
+        avatar_cache[uid] = url
+        print(f"[Avatar] Cached @{uid}: {url[:80]}")
 
 
 async def enqueue(username: str, type_: str, payload: dict):
@@ -93,25 +125,6 @@ async def _run(username: str):
     client = TikTokLiveClient(unique_id=username)
     sess["client"] = client
 
-    def _try_save_streamer_profile(event):
-        """Ambil foto profil streamer dari event kalau belum ada."""
-        if sess.get("profile_picture_url"):
-            return
-        try:
-            user = getattr(event, "user", None)
-            if not user:
-                return
-            uid = (getattr(user, "unique_id", "") or getattr(user, "uniqueId", "") or "").lower()
-            if uid != username:
-                return
-            avatar = getattr(user, "avatar_thumb", None) or getattr(user, "avatar", None)
-            urls = getattr(avatar, "url_list", [])
-            if urls:
-                sess["profile_picture_url"] = urls[-1]
-                print(f"[TikTok] Avatar @{username}: {urls[-1][:80]}")
-        except Exception:
-            pass
-
     @client.on(ConnectEvent)
     async def on_connect(event):
         sess["connected"] = True
@@ -121,6 +134,7 @@ async def _run(username: str):
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
         sess["connected"] = False
+        # Pertahankan avatar streamer di cache meski disconnect
         print(f"[TikTok] Disconnected: @{username}")
 
     if RoomUserSeqEvent:
@@ -132,19 +146,23 @@ async def _run(username: str):
 
     @client.on(GiftEvent)
     async def on_gift(event):
-        _try_save_streamer_profile(event)
+        # Cache avatar streamer + sender
+        _cache_avatar(getattr(event, "user", None))
         if event.gift.streakable and not event.repeat_end:
             return
+        sender_uid = (getattr(event.user, "unique_id", "") or "").lower().lstrip("@")
         await enqueue(username, "gift", {
-            "giftId":   str(event.gift.id),
-            "giftName": event.gift.name or "unknown",
-            "count":    event.repeat_count or 1,
-            "sender":   event.user.nickname or "unknown",
+            "giftId":        str(event.gift.id),
+            "giftName":      event.gift.name or "unknown",
+            "count":         event.repeat_count or 1,
+            "sender":        event.user.nickname or "unknown",
+            "senderUid":     sender_uid,
+            "senderAvatar":  avatar_cache.get(sender_uid),
         })
 
     @client.on(LikeEvent)
     async def on_like(event):
-        _try_save_streamer_profile(event)
+        _cache_avatar(getattr(event, "user", None))
         await enqueue(username, "like", {
             "count":  event.count or 1,
             "sender": event.user.nickname or "unknown",
@@ -153,10 +171,16 @@ async def _run(username: str):
     if CommentEvent:
         @client.on(CommentEvent)
         async def on_comment(event):
-            _try_save_streamer_profile(event)
-            msg    = getattr(event, "comment", None) or getattr(event, "message", None) or ""
-            sender = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
-            await enqueue(username, "chat", {"message": msg, "sender": sender})
+            _cache_avatar(getattr(event, "user", None))
+            msg       = getattr(event, "comment", None) or getattr(event, "message", None) or ""
+            sender    = getattr(event.user, "nickname", "unknown") if hasattr(event, "user") else "unknown"
+            sender_uid = (getattr(event.user, "unique_id", "") or "").lower().lstrip("@") if hasattr(event, "user") else ""
+            await enqueue(username, "chat", {
+                "message":      msg,
+                "sender":       sender,
+                "senderUid":    sender_uid,
+                "senderAvatar": avatar_cache.get(sender_uid),
+            })
 
     try:
         await client.connect()
@@ -173,15 +197,13 @@ def connect(username: str):
             print(f"[TikTok] @{username} already active")
             return
     sessions[username] = {
-        "client":              None,
-        "connected":           False,
-        "paused":              False,
-        "task":                None,
-        "stats":               {"gift": 0, "like": 0, "chat": 0},
-        "joined_at":           time.time(),
-        "viewer_count":        None,
-        "profile_picture_url": None,
-        "cover_url":           None,
+        "client":       None,
+        "connected":    False,
+        "paused":       False,
+        "task":         None,
+        "stats":        {"gift": 0, "like": 0, "chat": 0},
+        "joined_at":    time.time(),
+        "viewer_count": None,
     }
     loop = asyncio.get_event_loop()
     task = loop.create_task(_run(username))
@@ -236,8 +258,9 @@ def list_sessions():
             "joined_at":         sess.get("joined_at"),
             "queueLength":       len([e for e in event_queue if e.get("username") == user]),
             "viewer_count":      sess.get("viewer_count"),
-            "profilePictureUrl": sess.get("profile_picture_url"),
-            "coverUrl":          sess.get("cover_url"),
+            # Avatar streamer dari cache global
+            "profilePictureUrl": avatar_cache.get(user),
+            "coverUrl":          None,
         })
     return result
 
