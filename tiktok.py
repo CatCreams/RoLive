@@ -38,11 +38,10 @@ _session_lock     = asyncio.Lock()
 
 
 def _extract(room, sess: dict):
-    """Ekstrak viewer_count, profile_picture_url, cover_url dari protobuf room object."""
     try:
         vc = (
             getattr(getattr(room, "user_count", None), "value", None)
-            or getattr(getattr(room, "stats",      None), "total_user", None)
+            or getattr(getattr(room, "stats", None), "total_user", None)
             or getattr(room, "viewer_count", None)
         )
         if vc:
@@ -129,7 +128,6 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
-        # Coba ambil dari event dulu, fallback ke client.room_info
         room = getattr(event, "room", None) or getattr(client, "room_info", None)
         if room:
             _extract(room, sess)
@@ -139,16 +137,23 @@ async def _run(username: str):
         sess["connected"] = False
         print(f"[TikTok] Disconnected: @{username}")
 
-    # Viewer count realtime — paling reliable di TikTokLive 6.x
     if RoomUserSeqEvent:
         @client.on(RoomUserSeqEvent)
         async def on_viewers(event):
+            fields = {}
+            for k in dir(event):
+                if k.startswith("_"):
+                    continue
+                try:
+                    v = getattr(event, k)
+                    if isinstance(v, (int, float, str, bool)):
+                        fields[k] = v
+                except:
+                    pass
+            print(f"[DEBUG RoomUserSeq] @{username}: {fields}")
             vc = getattr(event, "viewer_count", None) or getattr(event, "total_user", None)
             if vc is not None:
                 sess["viewer_count"] = max(0, int(vc))
-            room = getattr(event, "room", None)
-            if room:
-                _extract(room, sess)
 
     @client.on(GiftEvent)
     async def on_gift(event):

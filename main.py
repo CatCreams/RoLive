@@ -109,6 +109,23 @@ async def dashboard_data():
 async def api_sessions():
     return tiktok.list_sessions()
 
+@app.get("/api/debug/viewers")
+async def debug_viewers():
+    result = {}
+    for user, sess in tiktok.sessions.items():
+        client = sess.get("client")
+        result[user] = {
+            "viewer_count": sess.get("viewer_count"),
+            "raw_fields": {}
+        }
+        if client:
+            try:
+                from TikTokLive.events import RoomUserSeqEvent
+                result[user]["RoomUserSeqEvent_available"] = True
+            except:
+                result[user]["RoomUserSeqEvent_available"] = False
+    return result
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
