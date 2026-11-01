@@ -167,8 +167,8 @@ async def _run(username: str):
         sess["connected"] = True
         sess["joined_at"] = time.time()
         print(f"[TikTok] Connected: @{username}")
-        loop = asyncio.get_event_loop()
-        loop.create_task(_fetch_streamer_avatar(username))
+        print(f"[Debug] event attrs: {dir(event)}")
+        print(f"[Debug] client attrs: {[x for x in dir(client) if 'room' in x.lower() or 'info' in x.lower() or 'user' in x.lower()]}")
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
