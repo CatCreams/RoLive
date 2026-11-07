@@ -1,7 +1,3 @@
-"""
-tiktok.py — Multi-session TikTok Live manager
-"""
-
 import asyncio
 import os
 import re
@@ -10,8 +6,16 @@ import json
 import time
 import uuid
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent, LikeEvent
+
+try:
+    from TikTokLive.events import FollowEvent
+except ImportError:
+    FollowEvent = None
 
 try:
     from TikTokLive.events import RoomUserSeqEvent
@@ -38,12 +42,12 @@ event_queue: list = []
 sessions: dict = {}
 avatar_cache: dict = {}
 
-_queue_lock = asyncio.Lock()
+_queue_lock   = asyncio.Lock()
 _session_lock = asyncio.Lock()
 
 
 async def push_to_roblox(event: dict, attempt: int = 1):
-    api_key = os.environ.get("ROBLOX_API_KEY", "").strip()
+    api_key     = os.environ.get("ROBLOX_API_KEY", "").strip()
     universe_id = os.environ.get("UNIVERSE_ID", "").strip()
 
     if not api_key or not universe_id:
@@ -75,150 +79,14 @@ async def push_to_roblox(event: dict, attempt: int = 1):
             await push_to_roblox(event, attempt + 1)
 
 
-async def _fetch_streamer_avatar(username: str):
-    """
-    Fetch avatar profil streamer dari halaman profil TikTok.
-
-    Avatar disimpan pada:
-        avatar_cache[username]
-
-    Jika session streamer sudah tersedia, avatar juga disimpan pada:
-        sessions[username]["profilePictureUrl"]
-    """
-
-    username = username.lower().lstrip("@")
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=8,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
-                ),
-            },
-        ) as c:
-
-            r = await c.get(f"https://www.tiktok.com/@{username}")
-
-            if not r.is_success:
-                print(
-                    f"[Avatar] HTTP {r.status_code} "
-                    f"for @{username}"
-                )
-                return
-
-            html = r.text
-
-            # Avatar profile picture
-            avatar_patterns = [
-                r'"avatarThumb"\s*:\s*\{\s*"urlList"\s*:\s*\[\s*"([^"]+)"',
-                r'"avatar_thumb"\s*:\s*\{\s*"url_list"\s*:\s*\[\s*"([^"]+)"',
-                r'"avatarLarger"\s*:\s*\{\s*"urlList"\s*:\s*\[\s*"([^"]+)"',
-                r'"avatarMedium"\s*:\s*\{\s*"urlList"\s*:\s*\[\s*"([^"]+)"',
-            ]
-
-            avatar_url = None
-
-            for pattern in avatar_patterns:
-                match = re.search(pattern, html)
-
-                if match:
-                    avatar_url = match.group(1)
-                    break
-
-            if avatar_url:
-                avatar_url = (
-                    avatar_url
-                    .replace("\\u002F", "/")
-                    .replace("\\/", "/")
-                    .replace("&amp;", "&")
-                )
-
-                # Store avatar by streamer username
-                avatar_cache[username] = avatar_url
-
-                # Store avatar in the session itself
-                sess = sessions.get(username)
-
-                if sess:
-                    sess["profilePictureUrl"] = avatar_url
-
-                print(
-                    f"[Avatar] Streamer @{username}: "
-                    f"{avatar_url[:100]}"
-                )
-
-            else:
-                print(
-                    f"[Avatar] No avatar match "
-                    f"for @{username}"
-                )
-
-            # Stream cover / thumbnail
-            cover_patterns = [
-                r'"coverUrl"\s*:\s*\{\s*"urlList"\s*:\s*\[\s*"([^"]+)"',
-                r'"roomCover"\s*:\s*\{\s*"urlList"\s*:\s*\[\s*"([^"]+)"',
-            ]
-
-            cover_url = None
-
-            for pattern in cover_patterns:
-                match = re.search(pattern, html)
-
-                if match:
-                    cover_url = match.group(1)
-                    break
-
-            if cover_url:
-                cover_url = (
-                    cover_url
-                    .replace("\\u002F", "/")
-                    .replace("\\/", "/")
-                    .replace("&amp;", "&")
-                )
-
-                sess = sessions.get(username)
-
-                if sess:
-                    sess["coverUrl"] = cover_url
-
-                print(
-                    f"[Cover] Stream @{username}: "
-                    f"{cover_url[:100]}"
-                )
-
-            else:
-                print(
-                    f"[Cover] No cover match "
-                    f"for @{username}"
-                )
-
-    except Exception as e:
-        print(
-            f"[Avatar] Streamer fetch failed "
-            f"@{username}: {e}"
-        )
-
-
 def _extract_avatar(user_obj) -> str | None:
     if not user_obj:
         return None
 
-    for attr in (
-        "avatar_thumb",
-        "avatar_medium",
-        "avatar",
-        "avatar_larger",
-    ):
+    for attr in ("avatar_thumb", "avatar_medium", "avatar", "avatar_larger"):
         obj = getattr(user_obj, attr, None)
-
         if obj:
             urls = getattr(obj, "url_list", [])
-
             if urls:
                 return urls[-1]
 
@@ -242,34 +110,25 @@ def _cache_avatar(user_obj):
 
     if url:
         avatar_cache[uid] = url
-
-        print(
-            f"[Avatar] Cached @{uid}: "
-            f"{url[:80]}"
-        )
+        print(f"[Avatar] Cached @{uid}: {url[:80]}")
 
 
-async def enqueue(
-    username: str,
-    type_: str,
-    payload: dict,
-):
+async def enqueue(username: str, type_: str, payload: dict):
     sess = sessions.get(username)
 
     if sess and sess.get("paused"):
         return
 
     event = {
-        "eventId": str(uuid.uuid4()),
-        "type": type_,
-        "username": username,
+        "eventId":   str(uuid.uuid4()),
+        "type":      type_,
+        "username":  username,
         "timestamp": int(time.time()),
         **payload,
     }
 
     async with _queue_lock:
         event_queue.append(event)
-
         if len(event_queue) > MAX_QUEUE:
             event_queue.pop(0)
 
@@ -279,10 +138,7 @@ async def enqueue(
         )
 
     loop = asyncio.get_event_loop()
-
-    loop.create_task(
-        push_to_roblox(event)
-    )
+    loop.create_task(push_to_roblox(event))
 
 
 async def _run(username: str):
@@ -291,131 +147,133 @@ async def _run(username: str):
     if not sess:
         return
 
-    client = TikTokLiveClient(
-        unique_id=username
-    )
-
+    client = TikTokLiveClient(unique_id=username)
     sess["client"] = client
 
     @client.on(ConnectEvent)
     async def on_connect(event):
         sess["connected"] = True
         sess["joined_at"] = time.time()
+        print(f"[TikTok] Connected: @{username}")
 
-        print(
-            f"[TikTok] Connected: @{username}"
-        )
+        try:
+            if client.room_info:
+                owner = client.room_info.get("owner", {})
 
-        # Fetch streamer avatar after connection
-        await _fetch_streamer_avatar(username)
+                avatar_url = None
+                for key, list_key in [("avatarThumb", "urlList"), ("avatar_thumb", "url_list"), ("avatarMedium", "urlList")]:
+                    obj = owner.get(key, {})
+                    urls = obj.get(list_key, [])
+                    if urls:
+                        avatar_url = urls[-1]
+                        break
 
-        # Use the avatar fetched for this streamer
-        sess["profilePictureUrl"] = (
-            avatar_cache.get(username)
-        )
+                if avatar_url:
+                    avatar_cache[username] = avatar_url
+                    sess["profilePictureUrl"] = avatar_url
+                    print(f"[Avatar] Got @{username}: {avatar_url[:80]}")
+                else:
+                    print(f"[Avatar] Tidak ada di room_info @{username}")
 
-        print(
-            f"[Avatar] Session @{username}: "
-            f"{sess.get('profilePictureUrl')}"
-        )
+                cover_url = None
+                for key, list_key in [("coverUrl", "urlList"), ("roomCover", "urlList")]:
+                    obj = owner.get(key, {})
+                    urls = obj.get(list_key, [])
+                    if urls:
+                        cover_url = urls[-1]
+                        break
+
+                if cover_url:
+                    sess["coverUrl"] = cover_url
+                    print(f"[Cover] Got @{username}: {cover_url[:80]}")
+
+        except Exception as e:
+            print(f"[Avatar] room_info error @{username}: {e}")
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
         sess["connected"] = False
-
-        print(
-            f"[TikTok] Disconnected: @{username}"
-        )
+        print(f"[TikTok] Disconnected: @{username}")
 
     if RoomUserSeqEvent:
-
         @client.on(RoomUserSeqEvent)
         async def on_viewers(event):
-            vc = getattr(
-                event,
-                "total",
-                None,
-            )
-
+            vc = getattr(event, "total", None)
             if vc is not None:
-                sess["viewer_count"] = max(
-                    0,
-                    int(vc),
-                )
+                sess["viewer_count"] = max(0, int(vc))
 
     @client.on(GiftEvent)
     async def on_gift(event):
-        _cache_avatar(
-            getattr(event, "user", None)
-        )
+        _cache_avatar(getattr(event, "user", None))
 
-        if (
-            event.gift.streakable
-            and not event.repeat_end
-        ):
+        if event.gift.streakable and not event.streaking:
             return
 
         sender_uid = (
-            getattr(
-                event.user,
-                "unique_id",
-                "",
-            )
-            or ""
+            getattr(event.user, "unique_id", "") or ""
         ).lower().lstrip("@")
+
+        gift_name = (
+            getattr(event.gift, "name", None)
+            or getattr(event.gift.info, "name", None)
+            or "unknown"
+        )
+
+        gift_id = (
+            getattr(event.gift, "id", None)
+            or getattr(event.gift.info, "id", None)
+            or "0"
+        )
 
         await enqueue(
             username,
             "gift",
             {
-                "giftId": str(event.gift.id),
-                "giftName": (
-                    event.gift.name
-                    or "unknown"
-                ),
-                "count": (
-                    event.repeat_count
-                    or 1
-                ),
-                "sender": (
-                    event.user.nickname
-                    or "unknown"
-                ),
-                "senderUid": sender_uid,
-                "senderAvatar": avatar_cache.get(
-                    sender_uid
-                ),
+                "giftId":       str(gift_id),
+                "giftName":     gift_name,
+                "count":        event.repeat_count or 1,
+                "sender":       event.user.nickname or "unknown",
+                "senderUid":    sender_uid,
+                "senderAvatar": avatar_cache.get(sender_uid),
             },
         )
 
     @client.on(LikeEvent)
     async def on_like(event):
-        _cache_avatar(
-            getattr(event, "user", None)
-        )
+        _cache_avatar(getattr(event, "user", None))
 
         await enqueue(
             username,
             "like",
             {
-                "count": (
-                    event.count
-                    or 1
-                ),
-                "sender": (
-                    event.user.nickname
-                    or "unknown"
-                ),
+                "count":  event.count or 1,
+                "sender": event.user.nickname or "unknown",
             },
         )
 
-    if CommentEvent:
+    if FollowEvent:
+        @client.on(FollowEvent)
+        async def on_follow(event):
+            _cache_avatar(getattr(event, "user", None))
 
+            sender_uid = (
+                getattr(event.user, "unique_id", "") or ""
+            ).lower().lstrip("@")
+
+            await enqueue(
+                username,
+                "follow",
+                {
+                    "sender":       getattr(event.user, "nickname", "unknown") or "unknown",
+                    "senderUid":    sender_uid,
+                    "senderAvatar": avatar_cache.get(sender_uid),
+                },
+            )
+
+    if CommentEvent:
         @client.on(CommentEvent)
         async def on_comment(event):
-            _cache_avatar(
-                getattr(event, "user", None)
-            )
+            _cache_avatar(getattr(event, "user", None))
 
             msg = (
                 getattr(event, "comment", None)
@@ -424,24 +282,13 @@ async def _run(username: str):
             )
 
             sender = (
-                getattr(
-                    event.user,
-                    "nickname",
-                    "unknown",
-                )
+                getattr(event.user, "nickname", "unknown")
                 if hasattr(event, "user")
                 else "unknown"
             )
 
             sender_uid = (
-                (
-                    getattr(
-                        event.user,
-                        "unique_id",
-                        "",
-                    )
-                    or ""
-                ).lower().lstrip("@")
+                (getattr(event.user, "unique_id", "") or "").lower().lstrip("@")
                 if hasattr(event, "user")
                 else ""
             )
@@ -450,36 +297,25 @@ async def _run(username: str):
                 username,
                 "chat",
                 {
-                    "message": msg,
-                    "sender": sender,
-                    "senderUid": sender_uid,
-                    "senderAvatar": avatar_cache.get(
-                        sender_uid
-                    ),
+                    "message":      msg,
+                    "sender":       sender,
+                    "senderUid":    sender_uid,
+                    "senderAvatar": avatar_cache.get(sender_uid),
                 },
             )
 
     try:
-        await client.connect()
-
+        await client.connect(fetch_room_info=True)
     except Exception as e:
         sess["connected"] = False
-
-        print(
-            f"[TikTok] Failed @{username}: {e}"
-        )
+        print(f"[TikTok] Failed @{username}: {e}")
 
 
 def connect(username: str):
-    username = (
-        username
-        .lstrip("@")
-        .lower()
-    )
+    username = username.lstrip("@").lower()
 
     if username in sessions:
         existing = sessions[username]
-
         if (
             existing.get("connected")
             or (
@@ -487,63 +323,39 @@ def connect(username: str):
                 and not existing["task"].done()
             )
         ):
-            print(
-                f"[TikTok] @{username} already active"
-            )
+            print(f"[TikTok] @{username} already active")
             return
 
     sessions[username] = {
-        "client": None,
-        "connected": False,
-        "paused": False,
-        "task": None,
-        "stats": {
-            "gift": 0,
-            "like": 0,
-            "chat": 0,
-        },
-        "joined_at": time.time(),
-        "viewer_count": None,
-
-        # Streamer profile picture
+        "client":            None,
+        "connected":         False,
+        "paused":            False,
+        "task":              None,
+        "stats":             {"gift": 0, "like": 0, "chat": 0, "follow": 0},
+        "joined_at":         time.time(),
+        "viewer_count":      None,
         "profilePictureUrl": None,
-
-        # Stream thumbnail
-        "coverUrl": None,
+        "coverUrl":          None,
     }
 
     loop = asyncio.get_event_loop()
-
-    task = loop.create_task(
-        _run(username)
-    )
-
+    task = loop.create_task(_run(username))
     sessions[username]["task"] = task
 
 
 def pause(username: str) -> bool:
-    sess = sessions.get(
-        username.lstrip("@").lower()
-    )
-
+    sess = sessions.get(username.lstrip("@").lower())
     if not sess:
         return False
-
     sess["paused"] = True
-
     return True
 
 
 def resume(username: str) -> bool:
-    sess = sessions.get(
-        username.lstrip("@").lower()
-    )
-
+    sess = sessions.get(username.lstrip("@").lower())
     if not sess:
         return False
-
     sess["paused"] = False
-
     return True
 
 
@@ -558,62 +370,37 @@ async def disconnect(username: str = None):
         loop = asyncio.get_event_loop()
 
         for user in targets:
-            sess = sessions.pop(
-                user,
-                None,
-            )
-
+            sess = sessions.pop(user, None)
             if sess and sess.get("client"):
-                loop.create_task(
-                    sess["client"].disconnect()
-                )
+                loop.create_task(sess["client"].disconnect())
 
 
 async def poll(limit: int = 100):
     async with _queue_lock:
         items = event_queue[:limit]
-
         del event_queue[:limit]
-
     return items
 
 
 def peek(limit: int = 50):
-    return list(
-        event_queue[-limit:]
-    )
+    return list(event_queue[-limit:])
 
 
 def list_sessions():
     result = []
 
     for user, sess in sessions.items():
-        result.append(
-            {
-                "username": user,
-                "connected": sess["connected"],
-                "paused": sess.get("paused", False),
-                "stats": sess["stats"],
-                "joined_at": sess.get("joined_at"),
-                "queueLength": len(
-                    [
-                        e
-                        for e in event_queue
-                        if e.get("username") == user
-                    ]
-                ),
-                "viewer_count": sess.get("viewer_count"),
-
-                # Streamer avatar
-                "profilePictureUrl": (
-                    sess.get("profilePictureUrl")
-                    or avatar_cache.get(user)
-                ),
-
-                # Stream cover / thumbnail
-                "coverUrl": sess.get("coverUrl"),
-            }
-        )
+        result.append({
+            "username":          user,
+            "connected":         sess["connected"],
+            "paused":            sess.get("paused", False),
+            "stats":             sess["stats"],
+            "joined_at":         sess.get("joined_at"),
+            "queueLength":       len([e for e in event_queue if e.get("username") == user]),
+            "viewer_count":      sess.get("viewer_count"),
+            "profilePictureUrl": sess.get("profilePictureUrl") or avatar_cache.get(user),
+            "coverUrl":          sess.get("coverUrl"),
+        })
 
     return result
 
@@ -622,15 +409,15 @@ def status():
     for user, sess in sessions.items():
         if sess["connected"]:
             return {
-                "connected": True,
-                "paused": sess.get("paused", False),
-                "username": user,
+                "connected":   True,
+                "paused":      sess.get("paused", False),
+                "username":    user,
                 "queueLength": len(event_queue),
             }
 
     return {
-        "connected": False,
-        "paused": False,
-        "username": None,
+        "connected":   False,
+        "paused":      False,
+        "username":    None,
         "queueLength": len(event_queue),
     }
