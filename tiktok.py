@@ -151,47 +151,47 @@ async def _run(username: str):
     sess["client"] = client
 
     @client.on(ConnectEvent)
-async def on_connect(event):
-    sess["connected"] = True
-    sess["joined_at"] = time.time()
-    print(f"[TikTok] Connected: @{username}")
+    async def on_connect(event):
+        sess["connected"] = True
+        sess["joined_at"] = time.time()
+        print(f"[TikTok] Connected: @{username}")
 
-    try:
-        if client.room_info:
-            owner = client.room_info.get("owner", {})
+        try:
+            if client.room_info:
+                owner = client.room_info.get("owner", {})
 
-            avatar_url = None
-            for key, list_key in [("avatarThumb", "urlList"), ("avatar_thumb", "url_list"), ("avatarMedium", "urlList")]:
-                obj = owner.get(key, {})
-                urls = obj.get(list_key, [])
-                if urls:
-                    avatar_url = urls[-1]
-                    break
+                avatar_url = None
+                for key, list_key in [("avatarThumb", "urlList"), ("avatar_thumb", "url_list"), ("avatarMedium", "urlList")]:
+                    obj = owner.get(key, {})
+                    urls = obj.get(list_key, [])
+                    if urls:
+                        avatar_url = urls[-1]
+                        break
 
-            if avatar_url:
-                avatar_cache[username] = avatar_url
-                sess["profilePictureUrl"] = avatar_url
-                print(f"[Avatar] Got @{username}: {avatar_url[:80]}")
+                if avatar_url:
+                    avatar_cache[username] = avatar_url
+                    sess["profilePictureUrl"] = avatar_url
+                    print(f"[Avatar] Got @{username}: {avatar_url[:80]}")
 
-                await push_to_roblox({
-                    "type":           "streamer_connected",
-                    "username":       username,
-                    "streamerAvatar": avatar_url,
-                })
+                    await push_to_roblox({
+                        "type":           "streamer_connected",
+                        "username":       username,
+                        "streamerAvatar": avatar_url,
+                    })
 
-            cover_url = None
-            for key, list_key in [("coverUrl", "urlList"), ("roomCover", "urlList")]:
-                obj = owner.get(key, {})
-                urls = obj.get(list_key, [])
-                if urls:
-                    cover_url = urls[-1]
-                    break
+                cover_url = None
+                for key, list_key in [("coverUrl", "urlList"), ("roomCover", "urlList")]:
+                    obj = owner.get(key, {})
+                    urls = obj.get(list_key, [])
+                    if urls:
+                        cover_url = urls[-1]
+                        break
 
-            if cover_url:
-                sess["coverUrl"] = cover_url
+                if cover_url:
+                    sess["coverUrl"] = cover_url
 
-    except Exception as e:
-        print(f"[Avatar] room_info error @{username}: {e}")
+        except Exception as e:
+            print(f"[Avatar] room_info error @{username}: {e}")
 
     @client.on(DisconnectEvent)
     async def on_disconnect(event):
