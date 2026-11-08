@@ -8,7 +8,6 @@ import uuid
 from dotenv import load_dotenv
 load_dotenv()
 
-from roblox_upload import upload_avatar_to_roblox, get_cached_asset
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent, LikeEvent
 
@@ -42,7 +41,7 @@ PUSH_RETRY_WAIT = 2.0
 event_queue: list = []
 sessions: dict = {}
 avatar_cache: dict = {}
-avatar_image_cache: dict = {}  # dipindah ke sini, bukan di main.py
+avatar_image_cache: dict = {}
 
 _queue_lock   = asyncio.Lock()
 _session_lock = asyncio.Lock()
@@ -70,7 +69,7 @@ async def push_to_roblox(event: dict, attempt: int = 1):
                 raise Exception(f"status={resp.status_code}")
 
             if resp.status_code >= 400:
-                print(f"[Push] Error: {resp.status_code}")
+                print(f"[Push] Error: {resp.status_code} {resp.text[:100]}")
                 return
 
     except Exception as e:
@@ -90,17 +89,15 @@ async def _precache_avatar(uid: str, url: str, is_streamer: bool = False):
             })
             if r.is_success:
                 content_type = r.headers.get("content-type", "image/jpeg")
-                avatar_image_cache[uid] = (r.content, content_type)  # langsung pakai local dict
+                avatar_image_cache[uid] = (r.content, content_type)
                 print(f"[Avatar] Pre-cached @{uid}")
 
-                rbx = await upload_avatar_to_roblox(uid, r.content, content_type)
-                print(f"[Avatar] Upload result @{uid}: {rbx!r}")
-
-                if is_streamer and rbx:
+                # Langsung pakai URL TikTok, tidak upload ke Roblox
+                if is_streamer:
                     await push_to_roblox({
                         "type":           "streamer_connected",
                         "username":       uid,
-                        "streamerAvatar": rbx,
+                        "streamerAvatar": url,
                     })
             else:
                 print(f"[Avatar] Fetch failed @{uid}: status={r.status_code}")
@@ -256,7 +253,8 @@ async def _run(username: str):
             or "0"
         )
 
-        rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+        # Ambil URL dari avatar_cache langsung
+        sender_avatar = avatar_cache.get(sender_uid, "")
 
         await enqueue(
             username,
@@ -267,7 +265,7 @@ async def _run(username: str):
                 "count":        event.repeat_count or 1,
                 "sender":       event.user.nickname or "unknown",
                 "senderUid":    sender_uid,
-                "senderAvatar": rbx_sender or "",
+                "senderAvatar": sender_avatar,
             },
         )
 
@@ -293,7 +291,7 @@ async def _run(username: str):
                 getattr(event.user, "unique_id", "") or ""
             ).lower().lstrip("@")
 
-            rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+            sender_avatar = avatar_cache.get(sender_uid, "")
 
             await enqueue(
                 username,
@@ -301,7 +299,7 @@ async def _run(username: str):
                 {
                     "sender":       getattr(event.user, "nickname", "unknown") or "unknown",
                     "senderUid":    sender_uid,
-                    "senderAvatar": rbx_sender or "",
+                    "senderAvatar": sender_avatar,
                 },
             )
 
@@ -328,7 +326,7 @@ async def _run(username: str):
                 else ""
             )
 
-            rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+            sender_avatar = avatar_cache.get(sender_uid, "")
 
             await enqueue(
                 username,
@@ -337,7 +335,7 @@ async def _run(username: str):
                     "message":      msg,
                     "sender":       sender,
                     "senderUid":    sender_uid,
-                    "senderAvatar": rbx_sender or "",
+                    "senderAvatar": sender_avatar,
                 },
             )
 
