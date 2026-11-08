@@ -25,7 +25,7 @@ app.add_middleware(
 API_KEY     = os.environ.get("API_KEY", "")
 UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
-TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us)?\.com/")
+TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us|-eu|-sg|-jp)?\.com/")
 
 
 def auth(request: Request):
