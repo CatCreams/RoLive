@@ -14,6 +14,8 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from tiktok import avatar_image_cache
+from PIL import Image
+from io import BytesIO
 
 app = FastAPI()
 
@@ -26,6 +28,8 @@ app.add_middleware(
 
 API_KEY     = os.environ.get("API_KEY", "")
 UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
+AVATAR_SIZE = 64
+avatar_rgba_cache = {}
 
 TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us|-eu|-sg|-jp)?\.com/")
 
@@ -115,6 +119,50 @@ async def get_avatar_base64(username: str):
         "base64":      base64.b64encode(data).decode(),
         "contentType": content_type,
     }
+
+@app.get("/api/avatar/{username}/rgba")
+async def get_avatar_rgba(username: str):
+    username = username.lower().lstrip("@")
+
+    if not re.fullmatch(r"[\w.]{1,40}", username):
+        raise HTTPException(status_code=400, detail="Invalid username")
+
+    # Cek cache
+    cached = avatar_rgba_cache.get(username)
+    if cached and time.time() - cached[0] < 300:
+        raw_rgba = cached[1]
+    else:
+        data, content_type = await _fetch_avatar_data(username)
+
+        if not data:
+            raise HTTPException(status_code=404, detail="Avatar not found")
+
+        try:
+            with Image.open(BytesIO(data)) as source:
+                image = source.convert("RGBA")
+                image.thumbnail((AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS)
+
+                canvas = Image.new("RGBA", (AVATAR_SIZE, AVATAR_SIZE), (0, 0, 0, 0))
+                x = (AVATAR_SIZE - image.width) // 2
+                y = (AVATAR_SIZE - image.height) // 2
+                canvas.alpha_composite(image, (x, y))
+                raw_rgba = canvas.tobytes()
+
+            avatar_rgba_cache[username] = (time.time(), raw_rgba)
+
+        except Exception as e:
+            print(f"[Avatar RGBA] @{username}: {e}")
+            raise HTTPException(status_code=422, detail="Image conversion failed")
+
+    return StreamingResponse(
+        iter([raw_rgba]),
+        media_type="application/octet-stream",
+        headers={
+            "X-Image-Width":  str(AVATAR_SIZE),
+            "X-Image-Height": str(AVATAR_SIZE),
+            "Cache-Control":  "private, max-age=300",
+        }
+    )
 
 
 @app.post("/session/start", dependencies=[Depends(auth)])
