@@ -12,6 +12,7 @@ import tiktok
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from roblox_upload import init_db
 
 app = FastAPI()
 
@@ -40,6 +41,9 @@ async def root():
     with open("dashboard.html", "r", encoding="utf-8") as f:
         return f.read()
 
+@app.on_event("startup")
+async def startup():
+    await init_db()
 
 @app.get("/api/image-proxy")
 async def image_proxy(url: str):
