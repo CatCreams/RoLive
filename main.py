@@ -28,7 +28,7 @@ UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
 TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us|-eu|-sg|-jp)?\.com/")
 
-avatar_image_cache: dict = {}
+from tiktok import avatar_image_cache
 
 
 def auth(request: Request):
@@ -68,6 +68,14 @@ async def image_proxy(url: str):
     except Exception:
         raise HTTPException(status_code=502, detail="Gagal menghubungi CDN TikTok")
 
+@app.get("/api/avatar/{username}/rbxasset")
+async def get_avatar_rbxasset(username: str):
+    username = username.lower().lstrip("@")
+    from roblox_upload import get_cached_asset
+    rbx = await get_cached_asset(username)
+    if not rbx:
+        raise HTTPException(status_code=404, detail="Asset belum tersedia")
+    return {"assetId": rbx}
 
 @app.get("/api/avatar/{username}")
 async def get_avatar(username: str):
@@ -195,6 +203,17 @@ async def dashboard_data():
 async def api_sessions():
     return tiktok.list_sessions()
 
+@app.post("/admin/clear-cache", dependencies=[Depends(auth)])
+async def admin_clear_cache(request: Request):
+    body = await request.json()
+    username = body.get("username")
+    from roblox_upload import clear_cache_for_user, clear_all_cache
+    if username:
+        await clear_cache_for_user(username)
+        return {"ok": True, "cleared": username}
+    else:
+        await clear_all_cache()
+        return {"ok": True, "cleared": "all"}
 
 @app.post("/api/roblox/lookup")
 async def roblox_lookup(request: Request):

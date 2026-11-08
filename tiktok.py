@@ -1,6 +1,5 @@
 import asyncio
 import os
-import re
 import httpx
 import json
 import time
@@ -9,6 +8,7 @@ import uuid
 from dotenv import load_dotenv
 load_dotenv()
 
+from roblox_upload import upload_avatar_to_roblox, get_cached_asset
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, DisconnectEvent, GiftEvent, LikeEvent
 
@@ -42,6 +42,7 @@ PUSH_RETRY_WAIT = 2.0
 event_queue: list = []
 sessions: dict = {}
 avatar_cache: dict = {}
+avatar_image_cache: dict = {}  # dipindah ke sini, bukan di main.py
 
 _queue_lock   = asyncio.Lock()
 _session_lock = asyncio.Lock()
@@ -80,7 +81,7 @@ async def push_to_roblox(event: dict, attempt: int = 1):
             await push_to_roblox(event, attempt + 1)
 
 
-async def _precache_avatar(uid: str, url: str):
+async def _precache_avatar(uid: str, url: str, is_streamer: bool = False):
     try:
         async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
             r = await c.get(url, headers={
@@ -88,9 +89,21 @@ async def _precache_avatar(uid: str, url: str):
                 "Referer": "https://www.tiktok.com/",
             })
             if r.is_success:
-                from main import avatar_image_cache
-                avatar_image_cache[uid] = (r.content, r.headers.get("content-type", "image/jpeg"))
+                content_type = r.headers.get("content-type", "image/jpeg")
+                avatar_image_cache[uid] = (r.content, content_type)  # langsung pakai local dict
                 print(f"[Avatar] Pre-cached @{uid}")
+
+                rbx = await upload_avatar_to_roblox(uid, r.content, content_type)
+                print(f"[Avatar] Upload result @{uid}: {rbx!r}")
+
+                if is_streamer and rbx:
+                    await push_to_roblox({
+                        "type":           "streamer_connected",
+                        "username":       uid,
+                        "streamerAvatar": rbx,
+                    })
+            else:
+                print(f"[Avatar] Fetch failed @{uid}: status={r.status_code}")
     except Exception as e:
         print(f"[Avatar] Pre-cache failed @{uid}: {e}")
 
@@ -192,13 +205,7 @@ async def _run(username: str):
                     print(f"[Avatar] Got @{username}: {avatar_url[:80]}")
 
                     loop = asyncio.get_event_loop()
-                    loop.create_task(_precache_avatar(username, avatar_url))
-
-                    await push_to_roblox({
-                        "type":           "streamer_connected",
-                        "username":       username,
-                        "streamerAvatar": f"{RAILWAY_URL}/api/avatar/{username}",
-                    })
+                    loop.create_task(_precache_avatar(username, avatar_url, is_streamer=True))
 
                 cover_url = None
                 for key, list_key in [("coverUrl", "urlList"), ("roomCover", "urlList")]:
@@ -249,6 +256,8 @@ async def _run(username: str):
             or "0"
         )
 
+        rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+
         await enqueue(
             username,
             "gift",
@@ -258,7 +267,7 @@ async def _run(username: str):
                 "count":        event.repeat_count or 1,
                 "sender":       event.user.nickname or "unknown",
                 "senderUid":    sender_uid,
-                "senderAvatar": f"{RAILWAY_URL}/api/avatar/{sender_uid}" if sender_uid else None,
+                "senderAvatar": rbx_sender or "",
             },
         )
 
@@ -284,13 +293,15 @@ async def _run(username: str):
                 getattr(event.user, "unique_id", "") or ""
             ).lower().lstrip("@")
 
+            rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+
             await enqueue(
                 username,
                 "follow",
                 {
                     "sender":       getattr(event.user, "nickname", "unknown") or "unknown",
                     "senderUid":    sender_uid,
-                    "senderAvatar": f"{RAILWAY_URL}/api/avatar/{sender_uid}" if sender_uid else None,
+                    "senderAvatar": rbx_sender or "",
                 },
             )
 
@@ -317,6 +328,8 @@ async def _run(username: str):
                 else ""
             )
 
+            rbx_sender = await get_cached_asset(sender_uid) if sender_uid else ""
+
             await enqueue(
                 username,
                 "chat",
@@ -324,7 +337,7 @@ async def _run(username: str):
                     "message":      msg,
                     "sender":       sender,
                     "senderUid":    sender_uid,
-                    "senderAvatar": avatar_cache.get(sender_uid),
+                    "senderAvatar": rbx_sender or "",
                 },
             )
 
