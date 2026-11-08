@@ -8,6 +8,7 @@ import time
 import httpx
 import uvicorn
 import tiktok
+import base64
 
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -63,6 +64,17 @@ async def image_proxy(url: str):
         raise
     except Exception:
         raise HTTPException(status_code=502, detail="Gagal menghubungi CDN TikTok")
+
+@app.get("/api/avatar/{username}/base64")
+async def get_avatar_base64(username: str):
+    username = username.lower().lstrip("@")
+
+    if username in avatar_image_cache:
+        data, content_type = avatar_image_cache[username]
+        encoded = base64.b64encode(data).decode("utf-8")
+        return {"dataUri": f"data:{content_type};base64,{encoded}"}
+
+    raise HTTPException(status_code=404, detail="Avatar tidak ditemukan")
 
 
 @app.get("/api/avatar/{username}")
