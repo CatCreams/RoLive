@@ -5,6 +5,7 @@ import asyncio
 import os
 import re
 import time
+import base64
 import httpx
 import uvicorn
 import tiktok
@@ -64,24 +65,16 @@ async def image_proxy(url: str):
         raise HTTPException(status_code=502, detail="Gagal menghubungi CDN TikTok")
 
 
-@app.get("/api/avatar/{username}")
-async def get_avatar(username: str):
-    username = username.lower().lstrip("@")
-
+async def _fetch_avatar_data(username: str):
     if username in avatar_image_cache:
-        data, content_type = avatar_image_cache[username]
-        return StreamingResponse(
-            iter([data]),
-            media_type=content_type,
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+        return avatar_image_cache[username]
 
     sess = tiktok.sessions.get(username)
     avatar_url = sess.get("profilePictureUrl") if sess else None
     avatar_url = avatar_url or tiktok.avatar_cache.get(username)
 
     if not avatar_url:
-        raise HTTPException(status_code=404, detail="Avatar tidak ditemukan")
+        return None, None
 
     try:
         async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
@@ -89,19 +82,39 @@ async def get_avatar(username: str):
                 "User-Agent": "Mozilla/5.0 (compatible; RoLive/1.0)",
                 "Referer":    "https://www.tiktok.com/",
             })
-            if not r.is_success:
-                raise HTTPException(status_code=502, detail="Gagal fetch avatar")
-            content_type = r.headers.get("content-type", "image/jpeg")
-            avatar_image_cache[username] = (r.content, content_type)
-            return StreamingResponse(
-                iter([r.content]),
-                media_type=content_type,
-                headers={"Cache-Control": "public, max-age=3600"},
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error: {e}")
+            if r.is_success:
+                content_type = r.headers.get("content-type", "image/jpeg")
+                avatar_image_cache[username] = (r.content, content_type)
+                return r.content, content_type
+    except Exception:
+        pass
+
+    return None, None
+
+
+@app.get("/api/avatar/{username}")
+async def get_avatar(username: str):
+    username = username.lower().lstrip("@")
+    data, content_type = await _fetch_avatar_data(username)
+    if not data:
+        raise HTTPException(status_code=404, detail="Avatar tidak ditemukan")
+    return StreamingResponse(
+        iter([data]),
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/api/avatar/{username}/base64")
+async def get_avatar_base64(username: str):
+    username = username.lower().lstrip("@")
+    data, content_type = await _fetch_avatar_data(username)
+    if not data:
+        raise HTTPException(status_code=404, detail="Avatar tidak ditemukan")
+    return {
+        "base64":      base64.b64encode(data).decode(),
+        "contentType": content_type,
+    }
 
 
 @app.post("/session/start", dependencies=[Depends(auth)])
