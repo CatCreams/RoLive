@@ -27,6 +27,8 @@ UNIVERSE_ID = os.environ.get("UNIVERSE_ID", "")
 
 TIKTOK_CDN_RE = re.compile(r"^https://[a-zA-Z0-9\-]+\.tiktokcdn(?:-us|-eu|-sg|-jp)?\.com/")
 
+avatar_image_cache: dict = {}
+
 
 def auth(request: Request):
     if request.headers.get("x-api-key") != API_KEY:
@@ -38,8 +40,6 @@ async def root():
     with open("dashboard.html", "r", encoding="utf-8") as f:
         return f.read()
 
-
-# ─── Image Proxy ────────────────────────────────────────────────────────────
 
 @app.get("/api/image-proxy")
 async def image_proxy(url: str):
@@ -65,7 +65,45 @@ async def image_proxy(url: str):
         raise HTTPException(status_code=502, detail="Gagal menghubungi CDN TikTok")
 
 
-# ─── Session ─────────────────────────────────────────────────────────────────
+@app.get("/api/avatar/{username}")
+async def get_avatar(username: str):
+    username = username.lower().lstrip("@")
+
+    if username in avatar_image_cache:
+        data, content_type = avatar_image_cache[username]
+        return StreamingResponse(
+            iter([data]),
+            media_type=content_type,
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    sess = tiktok.sessions.get(username)
+    avatar_url = sess.get("profilePictureUrl") if sess else None
+    avatar_url = avatar_url or tiktok.avatar_cache.get(username)
+
+    if not avatar_url:
+        raise HTTPException(status_code=404, detail="Avatar tidak ditemukan")
+
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
+            r = await c.get(avatar_url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; RoLive/1.0)",
+                "Referer":    "https://www.tiktok.com/",
+            })
+            if not r.is_success:
+                raise HTTPException(status_code=502, detail="Gagal fetch avatar")
+            content_type = r.headers.get("content-type", "image/jpeg")
+            avatar_image_cache[username] = (r.content, content_type)
+            return StreamingResponse(
+                iter([r.content]),
+                media_type=content_type,
+                headers={"Cache-Control": "public, max-age=3600"},
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error: {e}")
+
 
 @app.post("/session/start", dependencies=[Depends(auth)])
 async def session_start(request: Request):
@@ -112,8 +150,6 @@ async def session_resume(request: Request):
         raise HTTPException(status_code=404, detail="Session tidak ditemukan")
     return {"ok": True, "paused": False}
 
-
-# ─── Public API ──────────────────────────────────────────────────────────────
 
 @app.get("/events/poll", dependencies=[Depends(auth)])
 async def events_poll(limit: int = 100):

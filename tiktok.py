@@ -33,6 +33,7 @@ except ImportError:
 
 UNIVERSE_ID     = os.environ.get("UNIVERSE_ID", "")
 ROBLOX_API_KEY  = os.environ.get("ROBLOX_API_KEY", "")
+RAILWAY_URL     = os.environ.get("RAILWAY_URL", "https://rolive.up.railway.app")
 MESSAGING_TOPIC = "TikTokEvents"
 MAX_QUEUE       = 1000
 PUSH_MAX_RETRY  = 3
@@ -79,6 +80,21 @@ async def push_to_roblox(event: dict, attempt: int = 1):
             await push_to_roblox(event, attempt + 1)
 
 
+async def _precache_avatar(uid: str, url: str):
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as c:
+            r = await c.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; RoLive/1.0)",
+                "Referer": "https://www.tiktok.com/",
+            })
+            if r.is_success:
+                from main import avatar_image_cache
+                avatar_image_cache[uid] = (r.content, r.headers.get("content-type", "image/jpeg"))
+                print(f"[Avatar] Pre-cached @{uid}")
+    except Exception as e:
+        print(f"[Avatar] Pre-cache failed @{uid}: {e}")
+
+
 def _extract_avatar(user_obj) -> str | None:
     if not user_obj:
         return None
@@ -111,6 +127,8 @@ def _cache_avatar(user_obj):
     if url:
         avatar_cache[uid] = url
         print(f"[Avatar] Cached @{uid}: {url[:80]}")
+        loop = asyncio.get_event_loop()
+        loop.create_task(_precache_avatar(uid, url))
 
 
 async def enqueue(username: str, type_: str, payload: dict):
@@ -173,10 +191,13 @@ async def _run(username: str):
                     sess["profilePictureUrl"] = avatar_url
                     print(f"[Avatar] Got @{username}: {avatar_url[:80]}")
 
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(_precache_avatar(username, avatar_url))
+
                     await push_to_roblox({
                         "type":           "streamer_connected",
                         "username":       username,
-                        "streamerAvatar": avatar_url,
+                        "streamerAvatar": f"{RAILWAY_URL}/api/avatar/{username}",
                     })
 
                 cover_url = None
@@ -237,7 +258,7 @@ async def _run(username: str):
                 "count":        event.repeat_count or 1,
                 "sender":       event.user.nickname or "unknown",
                 "senderUid":    sender_uid,
-                "senderAvatar": avatar_cache.get(sender_uid),
+                "senderAvatar": f"{RAILWAY_URL}/api/avatar/{sender_uid}" if sender_uid else None,
             },
         )
 
@@ -269,7 +290,7 @@ async def _run(username: str):
                 {
                     "sender":       getattr(event.user, "nickname", "unknown") or "unknown",
                     "senderUid":    sender_uid,
-                    "senderAvatar": avatar_cache.get(sender_uid),
+                    "senderAvatar": f"{RAILWAY_URL}/api/avatar/{sender_uid}" if sender_uid else None,
                 },
             )
 
@@ -401,7 +422,7 @@ def list_sessions():
             "joined_at":         sess.get("joined_at"),
             "queueLength":       len([e for e in event_queue if e.get("username") == user]),
             "viewer_count":      sess.get("viewer_count"),
-            "profilePictureUrl": sess.get("profilePictureUrl") or avatar_cache.get(user),
+            "profilePictureUrl": f"{RAILWAY_URL}/api/avatar/{user}",
             "coverUrl":          sess.get("coverUrl"),
         })
 
