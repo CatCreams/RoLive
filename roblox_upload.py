@@ -93,14 +93,15 @@ async def upload_avatar_to_roblox(username: str, image_data: bytes, content_type
         print(f"[Upload] Returning cached @{username}: {cached}")
         return cached
 
-    api_key      = os.environ.get("ROBLOX_API_KEY", "")
+    # Pakai ROBLOX_ASSET_API_KEY (user key) khusus untuk Assets
+    api_key      = os.environ.get("ROBLOX_ASSET_API_KEY", "")
     creator_id   = os.environ.get("ROBLOX_CREATOR_ID", "")
     creator_type = os.environ.get("ROBLOX_CREATOR_TYPE", "user")
 
-    print(f"[Upload] Env check | api_key set: {bool(api_key)} | creator_id: {creator_id!r} | creator_type: {creator_type!r}")
+    print(f"[Upload] Env check | asset_api_key set: {bool(api_key)} | creator_id: {creator_id!r} | creator_type: {creator_type!r}")
 
     if not api_key or not creator_id:
-        print(f"[Upload] ABORT — missing ROBLOX_API_KEY or ROBLOX_CREATOR_ID")
+        print(f"[Upload] ABORT — missing ROBLOX_ASSET_API_KEY or ROBLOX_CREATOR_ID")
         return None
 
     creator_key = "groupId" if creator_type == "group" else "userId"
@@ -113,7 +114,7 @@ async def upload_avatar_to_roblox(username: str, image_data: bytes, content_type
                 "description": "",
                 "creationContext": {"creator": {creator_key: creator_id}}
             }
-            print(f"[Upload] Sending POST to Roblox Assets API @{username} | body: {request_body}")
+            print(f"[Upload] Sending POST @{username} | creator: {creator_key}={creator_id}")
 
             r = await c.post(
                 "https://apis.roblox.com/assets/v1/assets",
