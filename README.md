@@ -10,8 +10,8 @@
 [![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway&logoColor=white)](https://railway.app/)
 [![TikTokLive](https://img.shields.io/badge/TikTokLive-6.4.3-000000?logo=tiktok&logoColor=white)](https://pypi.org/project/TikTokLive/)
 
-[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@YOUR_CHANNEL)
-[![Discord](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/YOUR_INVITE)
+[![YouTube](https://img.shields.io/badge/YouTube-Subscribe-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/@CatCreamGT)
+[![Discord](https://img.shields.io/badge/Discord-Join%20server-5865F2?logo=discord&logoColor=white)](https://discord.gg/jz9RrJSn7)
 
 </div>
 
