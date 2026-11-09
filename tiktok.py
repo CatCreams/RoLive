@@ -32,7 +32,7 @@ except ImportError:
 
 UNIVERSE_ID     = os.environ.get("UNIVERSE_ID", "")
 ROBLOX_API_KEY  = os.environ.get("ROBLOX_API_KEY", "")
-RAILWAY_URL     = os.environ.get("RAILWAY_URL", "https://rolive.up.railway.app")
+RAILWAY_URL     = os.environ.get("RAILWAY_URL", "")
 MESSAGING_TOPIC = "TikTokEvents"
 MAX_QUEUE       = 1000
 PUSH_MAX_RETRY  = 3
