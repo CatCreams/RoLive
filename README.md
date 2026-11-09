@@ -48,6 +48,17 @@ Sebelum mulai, siapkan:
 
 Simpan API key sebagai secret/environment variable di Railway atau di file `.env` lokal. **Jangan commit API key atau file `.env` ke repository.**
 
+## Membuat Roblox Open Cloud API key
+
+1. Buka [Creator Dashboard Roblox](https://create.roblox.com/) dan masuk dengan akun yang memiliki akses ke experience.
+2. Pilih experience/game yang akan menerima event, lalu buka bagian **Open Cloud** dan **API Keys**.
+3. Pilih **Create API Key** dan beri nama yang mudah dikenali, misalnya `RoLive Messaging`.
+4. Atur akses seminimal mungkin: pilih experience/universe tujuan dan berikan izin **Messaging Service — Publish** (atau izin publish yang setara jika nama di dashboard berubah). Jangan aktifkan izin yang tidak dibutuhkan.
+5. Buat key, lalu salin dan simpan dengan aman. Roblox hanya menampilkan key penuh saat dibuat; jika hilang, buat key baru.
+6. Tambahkan key tersebut ke Railway sebagai nilai `ROBLOX_API_KEY` di tab **Variables**. Untuk penggunaan lokal, masukkan ke `.env`.
+
+> API key ini bersifat rahasia dan hanya digunakan oleh backend. Jangan masukkan ke script Roblox/client, jangan bagikan, dan jangan commit ke Git. Jika key terungkap, cabut/revoke key tersebut di Creator Dashboard lalu buat penggantinya.
+
 ## Deploy ke Railway
 
 1. Push atau fork repository ini ke akun GitHub-mu.
@@ -59,7 +70,7 @@ Simpan API key sebagai secret/environment variable di Railway atau di file `.env
    | --- | --- | --- |
    | `API_KEY` | Ya | Secret acak yang digunakan untuk melindungi endpoint kontrol sesi. Buat sendiri dan jangan gunakan contoh publik. |
    | `UNIVERSE_ID` | Ya | ID universe Roblox. Digunakan untuk informasi game dan pengiriman pesan. |
-   | `ROBLOX_API_KEY` | Ya untuk mengirim event ke Roblox | Roblox Open Cloud API key dengan izin publish Messaging Service untuk universe tujuan. |
+   | `ROBLOX_API_KEY` | Ya untuk mengirim event ke Roblox | Roblox Open Cloud API key dengan izin publish Messaging Service untuk universe tujuan. Lihat bagian [Membuat Roblox Open Cloud API key](#membuat-roblox-open-cloud-api-key). |
    | `RAILWAY_URL` | Disarankan | URL publik service, misalnya `https://nama-service.up.railway.app`, tanpa slash di akhir. Digunakan untuk membuat URL avatar. |
    | `NIXPACKS_NODE_VERSION` | Ya, jika build memakai Nixpacks | Set nilainya persis ke `20` untuk memilih Node.js 20. |
    | `EULER_API_KEY` | Opsional | Tidak dibaca oleh kode RoLive saat ini. Tambahkan hanya jika deployment atau integrasi eksternal yang kamu gunakan memerlukannya. |
