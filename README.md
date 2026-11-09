@@ -1,6 +1,3 @@
-Berikut isi `README.md` yang bisa kamu salin lalu edit. Ganti `YOUR_CHANNEL` dan `YOUR_INVITE` dengan tautan YouTube dan Discord milikmu.
-
-````markdown name=README.md
 <div align="center">
 
 # TikTok Reactive Live Bridge
@@ -192,4 +189,3 @@ Tambahkan informasi lisensi proyek di bagian ini jika repository memiliki file l
 ---
 
 Dibuat untuk menghubungkan event TikTok LIVE dengan pengalaman Roblox secara real-time. Pastikan penggunaan mematuhi ketentuan TikTok, Roblox, Railway, dan hak pengguna yang terkait.
-````
