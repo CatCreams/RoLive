@@ -5,6 +5,7 @@
 **Jembatan event TikTok LIVE ke Roblox** — pantau stream dan kirim event gift, like, follow, serta chat ke Roblox Messaging Service.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![HTML](https://img.shields.io/badge/HTML-dashboard-E34F26?logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
 [![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway&logoColor=white)](https://railway.app/)
 [![TikTokLive](https://img.shields.io/badge/TikTokLive-6.4.3-000000?logo=tiktok&logoColor=white)](https://pypi.org/project/TikTokLive/)
@@ -16,7 +17,7 @@
 
 ## Tentang proyek
 
-RoLive adalah backend FastAPI yang terhubung ke TikTok LIVE. Backend menerima event live melalui `TikTokLive`, menyimpan event sementara dalam antrean, lalu meneruskannya ke Roblox Open Cloud Messaging Service dengan topic `TikTokEvents`. Dashboard web menampilkan sesi, statistik, dan feed event.
+RoLive adalah backend FastAPI yang terhubung ke TikTok LIVE. Backend menerima event live melalui `TikTokLive`, menyimpan event sementara dalam antrean, lalu meneruskannya ke Roblox Open Cloud Messaging Service.
 
 **Event yang didukung:**
 
@@ -52,14 +53,17 @@ Simpan API key sebagai secret/environment variable di Railway atau di file `.env
 1. Push atau fork repository ini ke akun GitHub-mu.
 2. Di Railway, buat project baru dan pilih **Deploy from GitHub repo**, lalu pilih repository RoLive.
 3. Pastikan root directory mengarah ke root repository. Dependensi ada di `requirements.txt`, sedangkan `Procfile` menjalankan aplikasi dengan `python main.py`.
-4. Tambahkan environment variables berikut di bagian **Variables** pada Railway:
+4. Buka service RoLive di Railway, pilih tab **Variables**, lalu tambahkan environment variables berikut. Klik **New Variable** (atau **Add Variable**), masukkan nama dan nilai, lalu simpan:
 
-   | Variable | Wajib | Keterangan |
+   | Variable | Wajib | Nilai/keterangan |
    | --- | --- | --- |
    | `API_KEY` | Ya | Secret acak yang digunakan untuk melindungi endpoint kontrol sesi. Buat sendiri dan jangan gunakan contoh publik. |
    | `UNIVERSE_ID` | Ya | ID universe Roblox. Digunakan untuk informasi game dan pengiriman pesan. |
    | `ROBLOX_API_KEY` | Ya untuk mengirim event ke Roblox | Roblox Open Cloud API key dengan izin publish Messaging Service untuk universe tujuan. |
    | `RAILWAY_URL` | Disarankan | URL publik service, misalnya `https://nama-service.up.railway.app`, tanpa slash di akhir. Digunakan untuk membuat URL avatar. |
+   | `NIXPACKS_NODE_VERSION` | Ya | Set nilainya persis ke `20`. Ini menetapkan versi Node.js yang digunakan Nixpacks saat build. |
+
+   Untuk pengaturan Node.js: **Service → Variables → New Variable**. Isi **Name** dengan `NIXPACKS_NODE_VERSION`, **Value** dengan `20`, lalu simpan. Pastikan nilai tidak ditulis sebagai `v20` atau `20.x`.
 
    Kamu bisa membuat secret acak untuk `API_KEY` menggunakan Python:
 
@@ -69,8 +73,9 @@ Simpan API key sebagai secret/environment variable di Railway atau di file `.env
 
 5. Buat **Public Domain** untuk service Railway jika belum tersedia.
 6. Isi `RAILWAY_URL` dengan domain publik tersebut tanpa slash di akhir. Redeploy service jika perlu.
-7. Buka domain Railway untuk melihat dashboard. Dashboard tersedia di `/`.
-8. Periksa deployment logs jika service gagal dijalankan.
+7. Setelah mengubah Variables, jalankan redeploy agar versi Node.js 20 diterapkan pada build terbaru.
+8. Buka domain Railway untuk melihat dashboard. Dashboard tersedia di `/`.
+9. Periksa deployment logs jika service gagal dijalankan.
 
 > Jika `ROBLOX_API_KEY` atau `UNIVERSE_ID` tidak diatur, server masih dapat berjalan, tetapi event tidak akan dikirim ke Roblox.
 
@@ -109,6 +114,7 @@ API_KEY=ganti_dengan_secret_acak
 UNIVERSE_ID=id_universe_roblox
 ROBLOX_API_KEY=roblox_open_cloud_api_key
 RAILWAY_URL=http://localhost:8080
+NIXPACKS_NODE_VERSION=20
 ```
 
 Jalankan server:
@@ -170,9 +176,9 @@ Gunakan header `x-api-key` yang sama untuk endpoint kontrol tersebut. Untuk meng
 
 ## Alur event Roblox
 
-Ketika event diterima, bridge mengirim JSON ke Roblox Open Cloud Messaging Service dengan topic **`TikTokEvents`**. Payload memiliki field umum seperti `eventId`, `type`, `username`, dan `timestamp`, ditambah data sesuai jenis event, seperti nama gift atau isi chat.
+Ketika event diterima, bridge mengirim JSON ke Roblox Open Cloud Messaging Service dengan topic **`TikTokEvents`**. Payload memiliki field umum seperti `eventId`, `type`, `username`, dan `timestamp`, beserta data event yang relevan.
 
-Game Roblox perlu memiliki kode server-side yang berlangganan topic tersebut dan memproses pesan. Messaging Service ditujukan untuk komunikasi server-ke-server. **Jangan menaruh `ROBLOX_API_KEY` di client Roblox atau membagikannya kepada pemain.**
+Game Roblox perlu memiliki kode server-side yang berlangganan topic tersebut dan memproses pesan. Messaging Service ditujukan untuk komunikasi server-ke-server. **Jangan menaruh `ROBLOX_API_KEY` di dalam script Roblox atau membagikannya ke client.**
 
 ## Keamanan dan catatan
 
