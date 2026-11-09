@@ -61,7 +61,8 @@ Simpan API key sebagai secret/environment variable di Railway atau di file `.env
    | `UNIVERSE_ID` | Ya | ID universe Roblox. Digunakan untuk informasi game dan pengiriman pesan. |
    | `ROBLOX_API_KEY` | Ya untuk mengirim event ke Roblox | Roblox Open Cloud API key dengan izin publish Messaging Service untuk universe tujuan. |
    | `RAILWAY_URL` | Disarankan | URL publik service, misalnya `https://nama-service.up.railway.app`, tanpa slash di akhir. Digunakan untuk membuat URL avatar. |
-   | `NIXPACKS_NODE_VERSION` | Ya | Set nilainya persis ke `20`. Ini menetapkan versi Node.js yang digunakan Nixpacks saat build. |
+   | `NIXPACKS_NODE_VERSION` | Ya, jika build memakai Nixpacks | Set nilainya persis ke `20` untuk memilih Node.js 20. |
+   | `EULER_API_KEY` | Opsional | Tidak dibaca oleh kode RoLive saat ini. Tambahkan hanya jika deployment atau integrasi eksternal yang kamu gunakan memerlukannya. |
 
    Untuk pengaturan Node.js: **Service → Variables → New Variable**. Isi **Name** dengan `NIXPACKS_NODE_VERSION`, **Value** dengan `20`, lalu simpan. Pastikan nilai tidak ditulis sebagai `v20` atau `20.x`.
 
@@ -115,6 +116,8 @@ UNIVERSE_ID=id_universe_roblox
 ROBLOX_API_KEY=roblox_open_cloud_api_key
 RAILWAY_URL=http://localhost:8080
 NIXPACKS_NODE_VERSION=20
+# Opsional; tidak digunakan oleh kode RoLive saat ini
+# EULER_API_KEY=isi_jika_diperlukan_integrasi_eksternal
 ```
 
 Jalankan server:
