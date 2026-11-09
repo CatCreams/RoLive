@@ -220,7 +220,14 @@ async def events_poll(limit: int = 100):
 async def public_events():
     return tiktok.peek(100)
 
-
+@app.delete("/api/avatar/{username}/cache/clear", dependencies=[Depends(auth)])
+async def clear_avatar_cache(username: str):
+    username = username.lower().lstrip("@")
+    avatar_rgba_cache.pop(username, None)
+    avatar_image_cache.pop(username, None)
+    tiktok.avatar_cache.pop(username, None)
+    return {"ok": True, "cleared": username}
+    
 @app.get("/api/dashboard")
 async def dashboard_data():
     roblox_playing = 0
